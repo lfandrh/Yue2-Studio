@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YuE2 歌曲生成</title>
+<style>
+  :root {
+    --bg: #101418; --surface: #171d24; --surface2: #1e2630; --border: #2a3440;
+    --text: #dbe4ee; --muted: #8a97a6; --accent: #4fa3ff; --accent2: #7fd18a;
+    --danger: #ff6b6b; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text); min-height: 100vh;
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    font-size: 14px; padding-bottom: 84px;
+  }
+  header {
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+    padding: 18px 28px 14px; border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  .model-btn {
+    margin-left: auto; align-self: center; background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 6px 14px;
+    font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+  .model-btn:hover:not(:disabled) { border-color: var(--accent); }
+  .model-btn:disabled { opacity: 0.55; cursor: default; }
+  .model-btn.loaded { color: var(--accent2); border-color: #2c4a38; background: #182b20; }
+  .dev-switch {
+    display: flex; margin-left: 0; align-self: center;
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+    user-select: none;
+  }
+  .dev-switch button {
+    background: var(--surface2); color: var(--muted); border: none;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; cursor: pointer;
+    font-family: inherit; letter-spacing: 0.5px;
+  }
+  .dev-switch button + button { border-left: 1px solid var(--border); }
+  .dev-switch button:hover { color: var(--text); }
+  .dev-switch button.active { background: var(--accent); color: #08131f; }
+  .dev-chip {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.5px; flex: none;
+    padding: 2px 7px; border-radius: 6px; border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .dev-chip.gpu { color: var(--accent2); border-color: #2c4a38; background: #182b20; }
+  main { max-width: 1080px; margin: 0 auto; padding: 20px 28px; display: grid;
+         grid-template-columns: 380px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--border);
+          border-radius: var(--radius); padding: 16px; }
+  .card h2 { font-size: 13px; color: var(--muted); font-weight: 600;
+             text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+  textarea, input[type="text"], input[type="number"], select {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); padding: 8px 10px; font-size: 13px;
+    font-family: inherit; resize: vertical;
+  }
+  textarea:focus, input:focus, select:focus { outline: none; border-color: var(--accent); }
+  #lyrics { min-height: 150px; }
+  #style { min-height: 60px; }
+  .row { display: flex; gap: 10px; }
+  .row > div { flex: 1; }
+  button.primary {
+    width: 100%; margin-top: 14px; padding: 10px; border: none; border-radius: 8px;
+    background: var(--accent); color: #08131f; font-size: 14px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+  }
+  button.primary:disabled { opacity: 0.45; cursor: not-allowed; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  .status-pill { display: inline-block; padding: 2px 10px; border-radius: 20px;
+    font-size: 11px; font-weight: 600; }
+  .st-queued   { background: #2b3542; color: var(--muted); }
+  .st-running  { background: #1c3a5e; color: #9cc9ff; }
+  .st-complete { background: #1d3a2a; color: var(--accent2); }
+  .st-failed   { background: #46232a; color: var(--danger); }
+  .stage-line { font-size: 12px; color: var(--accent); margin-top: 6px;
+                font-variant-numeric: tabular-nums; white-space: pre-wrap; }
+  .job-list { display: flex; flex-direction: column; gap: 12px; }
+  .job {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px;
+  }
+  .job .top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .job .jid { font-weight: 600; font-size: 14px; }
+  .job .meta { color: var(--muted); font-size: 12px;
+               overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+               flex: 1; min-width: 120px; }
+  .job .actions { display: flex; gap: 8px; margin-left: auto; }
+  .btn {
+    border: 1px solid var(--border); background: var(--surface2); color: var(--text);
+    padding: 5px 12px; border-radius: 7px; font-size: 12px; cursor: pointer;
+    font-family: inherit;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.playing { border-color: var(--accent); color: var(--accent); }
+  .error-line { color: var(--danger); font-size: 12px; margin-top: 8px;
+                word-break: break-all; }
+  .score-panel { margin-top: 10px; }
+  .score-panel textarea { min-height: 220px; font-family: Consolas, monospace;
+                          font-size: 12px; white-space: pre; }
+  .modal-mask {
+    position: fixed; inset: 0; background: rgba(5,8,12,0.72); display: none;
+    align-items: center; justify-content: center; z-index: 50;
+  }
+  .modal-mask.open { display: flex; }
+  .modal { width: min(760px, 92vw); max-height: 88vh; overflow: auto; }
+  .modal .card h2 { display: flex; justify-content: space-between; align-items: center; }
+  /* custom player */
+  #player {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    background: var(--surface); border-top: 1px solid var(--border);
+    display: none; align-items: center; gap: 14px; padding: 12px 24px;
+  }
+  #player.open { display: flex; }
+  #player .pbtn {
+    width: 38px; height: 38px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--accent); display: flex; align-items: center; justify-content: center;
+    flex: none;
+  }
+  #player .pbtn svg { width: 16px; height: 16px; fill: #08131f; }
+  #player .pname { font-size: 13px; font-weight: 600; max-width: 240px;
+                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #player .ptime { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #seek { flex: 1; -webkit-appearance: none; height: 5px; border-radius: 3px;
+          background: var(--surface2); cursor: pointer; }
+  #seek::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px;
+          border-radius: 50%; background: var(--accent); }
+  #vol { width: 90px; -webkit-appearance: none; height: 5px; border-radius: 3px;
+         background: var(--surface2); cursor: pointer; }
+  #vol::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px;
+         border-radius: 50%; background: var(--muted); }
+  .toast {
+    position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 18px; border-radius: 8px; font-size: 13px; display: none; z-index: 60;
+  }
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 30px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>YuE2 歌曲生成</h1>
+  <span class="sub">歌词 + 风格 → 乐谱 → 48kHz 立体声 · 单任务队列</span>
+  <button type="button" id="modelBtn" class="model-btn" title="">加载模型</button>
+  <div class="dev-switch" role="group" aria-label="运行设备">
+    <button type="button" data-device="cpu" class="active" aria-pressed="true" title="使用 CPU 生成">CPU</button>
+    <button type="button" data-device="cuda" aria-pressed="false" title="使用 NVIDIA GPU 生成">GPU</button>
+  </div>
+</header>
+<main>
+  <section>
+    <div class="card">
+      <h2>新建任务</h2>
+      <label for="style">风格描述</label>
+      <textarea id="style" placeholder="例：Mandarin, city pop, warm female vocal, electric piano, 96 BPM"></textarea>
+      <label for="lyrics">歌词（建议带 [Verse] / [Chorus] 结构标记）</label>
+      <textarea id="lyrics" placeholder="[Verse]&#10;第一段歌词…&#10;&#10;[Chorus]&#10;副歌歌词…"></textarea>
+      <div class="row">
+        <div>
+          <label for="seed">Seed（留空随机）</label>
+          <input type="number" id="seed" placeholder="随机">
+        </div>
+        <div>
+          <label for="cot">规划模式</label>
+          <select id="cot">
+            <option value="full" selected>full（旋律+和弦）</option>
+            <option value="melody">melody（仅旋律）</option>
+            <option value="off">off（不规划）</option>
+          </select>
+        </div>
+      </div>
+      <button class="primary" id="submit">生成歌曲</button>
+      <div class="hint" id="deviceHint"></div>
+    </div>
+  </section>
+  <section class="job-list" id="jobList">
+    <div class="empty">暂无任务</div>
+  </section>
+</main>
+
+<div class="modal-mask" id="scoreMask">
+  <div class="modal card">
+    <h2><span id="scoreTitle">乐谱</span><button class="btn" id="scoreClose">关闭</button></h2>
+    <textarea id="scoreText" spellcheck="false"></textarea>
+    <div class="hint">可修改旋律（Vocal 声部）、和声（chord）、速度与段落；保存后将以新任务重新渲染完整歌曲。</div>
+    <button class="primary" id="scoreSave">保存并重新渲染</button>
+  </div>
+</div>
+
+<div id="player">
+  <button class="pbtn" id="pbtn"><svg viewBox="0 0 16 16"><path id="picon" d="M4 2l10 6-10 6z"/></svg></button>
+  <span class="pname" id="pname"></span>
+  <span class="ptime" id="tcur">0:00</span>
+  <input type="range" id="seek" min="0" max="1000" value="0">
+  <span class="ptime" id="tdur">0:00</span>
+  <input type="range" id="vol" min="0" max="100" value="90">
+  <audio id="audio"></audio>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let jobs = [], playingId = null, scoreJobId = null, device = 'cuda', model = null;
+
+function updateHint() {
+  let text = device === 'cuda'
+    ? 'GPU 模式：分阶段放置（当前阶段完整驻留显存，另一阶段暂存内存），已关闭 CUDA graph。'
+    : 'CPU 模式全程约 8~10 分钟；任务按提交顺序执行，同一时间只跑一个。';
+  if (model && model.state === 'loaded' && model.device !== device) {
+    text += ' 模型当前加载在 ' + (model.device === 'cuda' ? 'GPU' : 'CPU') + '，下次生成会自动重载。';
+  }
+  if (model && model.reason) text += ' ' + model.reason;
+  $('deviceHint').textContent = text;
+}
+
+function setDevice(d) {
+  device = d;
+  document.querySelectorAll('.dev-switch button').forEach(b => {
+    const on = b.dataset.device === d;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+  updateHint();
+}
+document.querySelectorAll('.dev-switch button').forEach(b => b.onclick = () => setDevice(b.dataset.device));
+setDevice('cuda');
+
+async function refreshModel() {
+  let m;
+  try { m = await (await fetch('/api/model')).json(); } catch (e) { return; }
+  const first = model === null;
+  model = m;
+  if (first) setDevice(m.device || m.default_device || 'cpu');
+  else if (m.state === 'loaded' && m.device === 'cpu' && m.reason) setDevice('cpu');
+  else updateHint();
+  const b = $('modelBtn');
+  const busy = !!m.busy || jobs.some(j => j.status === 'running' || j.status === 'queued');
+  b.classList.toggle('loaded', m.state === 'loaded');
+  if (m.state === 'loading') {
+    b.textContent = '加载中…'; b.disabled = true; b.title = '正在加载模型';
+  } else if (m.state === 'unloading') {
+    b.textContent = '卸载中…'; b.disabled = true; b.title = '';
+  } else if (m.state === 'loaded') {
+    const chip = m.device === 'cuda' ? 'GPU' : 'CPU';
+    b.textContent = '卸载模型 · ' + chip; b.disabled = busy;
+    b.title = (m.device_name || chip) + ' 已加载，点击卸载并释放内存';
+  } else {
+    b.textContent = '加载模型'; b.disabled = busy;
+    b.title = m.gpu && m.gpu.suitable ? ('将加载到 ' + m.gpu.name)
+      : (m.gpu && m.gpu.reason ? m.gpu.reason : '将加载到 CPU');
+  }
+}
+
+$('modelBtn').onclick = async () => {
+  if (!model) return;
+  const unloading = model.state === 'loaded';
+  $('modelBtn').disabled = true;
+  $('modelBtn').textContent = unloading ? '卸载中…' : '加载中…';
+  const r = await fetch(unloading ? '/api/model/unload' : '/api/model/load', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(unloading ? {} : {device})});
+  if (!r.ok) {
+    toast(await r.json().then(d => d.detail).catch(() => '操作失败'));
+  } else {
+    const m = await r.json();
+    if (m.reason) toast(m.reason);
+    else toast(unloading ? '模型已卸载' : '模型已加载 · ' + (m.device === 'cuda' ? 'GPU' : 'CPU'));
+  }
+  await refreshModel();
+};
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 2600);
+}
+function fmt(s) { s = Math.max(0, s|0); return (s/60|0) + ':' + String(s%60).padStart(2,'0'); }
+
+async function refresh() {
+  try {
+    const r = await fetch('/api/jobs'); jobs = (await r.json()).jobs;
+  } catch (e) { return; }
+  const list = $('jobList');
+  if (!jobs.length) { list.innerHTML = '<div class="empty">暂无任务</div>'; return; }
+  list.innerHTML = '';
+  for (const j of jobs) {
+    const div = document.createElement('div'); div.className = 'job';
+    const stMap = {queued:'排队中', running:'生成中', complete:'已完成', failed:'失败'};
+    let inner = `<div class="top">
+      <span class="jid">${j.id}</span>
+      <span class="status-pill st-${j.status}">${stMap[j.status] || j.status}</span>
+      <span class="dev-chip ${j.device === 'cuda' ? 'gpu' : ''}">${j.device === 'cuda' ? 'GPU' : 'CPU'}</span>
+      <span class="meta">${esc(j.style)}</span>
+      <div class="actions">`;
+    if (j.status === 'complete') {
+      inner += `<button class="btn ${playingId===j.id?'playing':''}" data-act="play" data-id="${j.id}">${playingId===j.id?'暂停':'播放'}</button>
+                <button class="btn" data-act="score" data-id="${j.id}">乐谱</button>
+                <a class="btn" href="/api/jobs/${j.id}/audio" download>下载</a>`;
+    }
+    if (j.status !== 'running') {
+      inner += `<button class="btn" data-act="del" data-id="${j.id}">删除</button>`;
+    }
+    inner += `</div></div>`;
+    if (j.status === 'queued') inner += `<div class="stage-line">排队等待中…</div>`;
+    if (j.status === 'running') inner += `<div class="stage-line">${esc(j.stage)} · ${esc(j.progress)}</div>`;
+    if (j.status === 'failed')  inner += `<div class="error-line">失败：${esc(j.error)}</div>`;
+    if (j.status === 'complete' && j.truncated && (j.truncated.abc || j.truncated.semantic)) {
+      inner += `<div class="error-line">注意：生成被截断，歌曲可能不完整，建议换 seed 重试</div>`;
+    }
+    if (j.duration) inner += `<div class="meta" style="margin-top:6px">时长 ${fmt(j.duration)}${j.seconds ? ' · 耗时 ' + fmt(j.seconds) : ''}</div>`;
+    div.innerHTML = inner;
+    list.appendChild(div);
+  }
+  $('submit').disabled = jobs.some(j => j.status === 'running' || j.status === 'queued');
+}
+
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+$('jobList').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const id = b.dataset.id, act = b.dataset.act;
+  if (act === 'play') togglePlay(id);
+  if (act === 'score') openScore(id);
+  if (act === 'del') {
+    if (!confirm('删除该任务及其音频？')) return;
+    const r = await fetch('/api/jobs/' + id, {method: 'DELETE'});
+    if (!r.ok) toast(await r.json().then(d => d.detail).catch(() => '删除失败'));
+    refresh();
+  }
+});
+
+$('submit').onclick = async () => {
+  const body = {
+    style: $('style').value, lyrics: $('lyrics').value,
+    cot: $('cot').value, device,
+    seed: $('seed').value === '' ? null : Number($('seed').value),
+  };
+  const r = await fetch('/api/jobs', {method: 'POST',
+    headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  if (!r.ok) { toast((await r.json()).detail || '提交失败'); return; }
+  toast('任务已提交'); refresh();
+};
+
+async function openScore(id) {
+  const r = await fetch(`/api/jobs/${id}/score`);
+  if (!r.ok) { toast('乐谱读取失败'); return; }
+  scoreJobId = id;
+  $('scoreTitle').textContent = '乐谱 · ' + id;
+  $('scoreText').value = (await r.json()).abc;
+  $('scoreMask').classList.add('open');
+}
+$('scoreClose').onclick = () => $('scoreMask').classList.remove('open');
+$('scoreSave').onclick = async () => {
+  const r = await fetch(`/api/jobs/${scoreJobId}/rerender`, {method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({abc: $('scoreText').value})});
+  if (!r.ok) { toast((await r.json()).detail || '提交失败'); return; }
+  $('scoreMask').classList.remove('open');
+  toast('重渲染任务已提交'); refresh();
+};
+
+/* custom player */
+const audio = $('audio');
+function togglePlay(id) {
+  if (playingId === id && !audio.paused) { audio.pause(); return; }
+  if (playingId === id) { audio.play(); return; }
+  playingId = id;
+  audio.src = `/api/jobs/${id}/audio`;
+  $('pname').textContent = id;
+  $('player').classList.add('open');
+  audio.play();
+}
+function setIcon(playing) {
+  $('picon').setAttribute('d', playing ? 'M3 2h4v12H3zM9 2h4v12H9z' : 'M4 2l10 6-10 6z');
+}
+$('pbtn').onclick = () => { audio.paused ? audio.play() : audio.pause(); };
+audio.onplay  = () => { setIcon(true);  refresh(); };
+audio.onpause = () => { setIcon(false); refresh(); };
+audio.onended = () => { setIcon(false); };
+audio.ontimeupdate = () => {
+  $('tcur').textContent = fmt(audio.currentTime);
+  $('tdur').textContent = fmt(audio.duration || 0);
+  if (audio.duration) $('seek').value = audio.currentTime / audio.duration * 1000;
+};
+$('seek').oninput = () => { if (audio.duration) audio.currentTime = $('seek').value / 1000 * audio.duration; };
+$('vol').oninput = () => { audio.volume = $('vol').value / 100; };
+audio.volume = 0.9;
+
+refresh();
+refreshModel();
+setInterval(() => { refresh(); refreshModel(); }, 1500);
+</script>
+</body>
+</html>

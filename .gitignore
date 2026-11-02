@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Virtual environments and caches
+.venv*/
+venv/
+.cache/
+
+# Model weights and packaged wheels
+models/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.whl
+
+# Archives (source snapshots are reproducible from YuE/)
+*.zip
+*.7z
+*.tar
+*.tar.gz
+
+# Runtime state and generated artifacts
+runs/
+*.log
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Local documentation and test evidence (deliberately not shared)
+/docs/
+/test-run/
+/tools/evidence/
+/YuE/docs/
+/YuE/assets/
+/YuE/examples/README.md
+*.pdf
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

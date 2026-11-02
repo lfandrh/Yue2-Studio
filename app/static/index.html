@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YuE2 音乐工作台</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23171A18'/%3E%3Cpath d='M7 16h3l2-6 3 12 3-9 2 5h5' fill='none' stroke='%2393BCA6' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<script>
+/* 主题与语言在首帧前落定，避免闪白/闪黑 */
+(function(){try{
+  var t=localStorage.getItem("yue2.theme")||
+    (matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");
+  document.documentElement.dataset.theme=t;
+  document.documentElement.lang=localStorage.getItem("yue2.lang")==="en"?"en":"zh-CN";
+}catch(e){}})();
+</script>
+<link rel="stylesheet" href="/static/styles/tokens.css">
+<link rel="stylesheet" href="/static/styles/base.css">
+<link rel="stylesheet" href="/static/styles/components.css">
+</head>
+<body>
+<div class="shell">
+
+  <!-- ============ TOP ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M2 12h2.4M7 6.5v11M11.5 3.5v17M16 8v8M20.5 10.5v3" stroke="currentColor" stroke-width="1.9"
+          stroke-linecap="round" fill="none"/>
+      </svg>
+      <span class="bn">YuE2</span> <span class="tag">本地推理</span>
+    </div>
+    <div class="mstatus" id="mstat">
+      <span class="dot"></span><span id="mstatText">正在读取后端状态…</span>
+    </div>
+    <span class="badge fail net" id="netBadge" hidden>连接中断 · 重连中</span>
+    <div class="spacer"></div>
+    <div class="devseg" role="group" aria-label="运行设备">
+      <button type="button" data-dev="cpu" aria-pressed="false">CPU</button>
+      <button type="button" data-dev="cuda" aria-pressed="false">GPU</button>
+    </div>
+    <div class="langseg" role="group" aria-label="界面语言">
+      <button type="button" data-lang="zh" aria-pressed="true">中</button>
+      <button type="button" data-lang="en" aria-pressed="false">EN</button>
+    </div>
+    <button class="iconbtn tbtn" id="btnTheme" type="button" aria-label="切换深浅色主题" title="切换深浅色主题（快捷键 T）">
+      <svg id="icoSun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M5 5l1.8 1.8M17.2 17.2 19 19M19 5l-1.8 1.8M6.8 17.2 5 19" stroke-linecap="round"/></svg>
+      <svg id="icoMoon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="btn ghost" id="btnLoad" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8.5 12 3 3 8.5v7L12 21l9-5.5z"/><path d="M3 8.5 12 14l9-5.5M12 14v7"/></svg>
+      <span class="lb">加载模型</span>
+    </button>
+    <button class="btn ghost sm" id="btnKeys" type="button" aria-label="快捷键说明" title="快捷键（?）">
+      <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>
+      <span>快捷键</span>
+    </button>
+  </header>
+
+  <!-- ============ RAIL ============ -->
+  <nav class="rail" aria-label="主导航">
+    <div class="grp">工作区</div>
+    <button class="nav" data-view="studio" aria-current="page" type="button">
+      <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <span class="lb">创作</span><span class="count" id="cStudio">0</span>
+    </button>
+    <button class="nav" data-view="score" type="button">
+      <svg viewBox="0 0 24 24"><path d="M3 9h18M3 12h18M3 15h18"/><ellipse cx="9" cy="14.6" rx="2.2" ry="1.7" transform="rotate(-20 9 14.6)"/><path d="M11.2 14.2V5.6l6-1.2"/></svg>
+      <span class="lb">乐谱工作台</span>
+    </button>
+    <button class="nav" data-view="library" type="button">
+      <svg viewBox="0 0 24 24"><path d="M4 4h4v16H4zM10 4h4v16h-4zM17 5l3 1-3.5 13-3-1z"/></svg>
+      <span class="lb">曲库</span><span class="count" id="cLib">0</span>
+    </button>
+    <div class="grp">帮助</div>
+    <button class="nav" data-view="guide" type="button">
+      <svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 18.5V5.5M8 7h8M8 11h5"/></svg>
+      <span class="lb">教程</span>
+    </button>
+    <div class="grp">本机</div>
+    <button class="nav" data-view="system" type="button">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.08a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.08a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span class="lb">系统</span>
+    </button>
+    <div class="railfoot" id="railfoot">单任务队列</div>
+  </nav>
+
+  <!-- ============ WORK ============ -->
+  <main class="work" id="work">
+
+    <!-- ---------- STUDIO ---------- -->
+    <section class="view active" id="v-studio" aria-labelledby="studio-h">
+      <div class="vhead">
+        <h1 id="studio-h">创作一首歌</h1>
+        <p>写风格与歌词 → 模型先出<b>可读可改的乐谱</b> → 渲染 48kHz 立体声完整歌曲。</p>
+      </div>
+
+      <!-- 首次进入的三步引导：内容由 renderGuide() 生成（要跟着表单是否已填而变化） -->
+      <div class="guide" id="guide" hidden></div>
+
+      <div class="cols">
+        <div>
+          <div class="card">
+
+            <div class="inline" style="justify-content:space-between;margin-bottom:var(--sp4);gap:var(--sp3)">
+              <h2 style="min-width:0"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h7"/></svg>风格描述</h2>
+              <div class="inline" style="gap:var(--sp2);flex:none;flex-wrap:nowrap">
+                <select class="inp" id="fPreset" aria-label="范例风格" style="min-height:32px;font-size:13px;width:200px"></select>
+                <button class="btn sm" id="btnPreset" type="button">载入范例</button>
+              </div>
+            </div>
+            <div class="grid2">
+              <div class="field"><label for="fLang">语言</label>
+                <select class="inp" id="fLang">
+                  <option value="Mandarin" selected>中文</option><option value="English">英文</option>
+                  <option value="Cantonese">粤语</option><option value="Japanese">日语</option>
+                </select></div>
+              <div class="field"><label for="fBpm">速度 <span class="idn">BPM</span></label>
+                <input class="inp" id="fBpm" type="number" value="92" min="40" max="220" inputmode="numeric"></div>
+            </div>
+            <div class="field"><label>流派</label><div class="chipset" data-dim="genre">
+              <button class="chip" data-token="city pop" title="city pop" aria-pressed="false" type="button">城市流行</button>
+              <button class="chip" data-token="acoustic pop" title="acoustic pop" aria-pressed="false" type="button">不插电流行</button>
+              <button class="chip" data-token="jazz-funk" title="jazz-funk" aria-pressed="false" type="button">爵士放克</button>
+              <button class="chip" data-token="folk ballad" title="folk ballad" aria-pressed="false" type="button">民谣叙事</button>
+              <button class="chip" data-token="synthwave" title="synthwave" aria-pressed="false" type="button">合成器浪潮</button>
+              <button class="chip" data-token="mandarin rock" title="mandarin rock" aria-pressed="false" type="button">华语摇滚</button>
+            </div></div>
+            <div class="field"><label>乐器</label><div class="chipset" data-dim="inst">
+              <button class="chip" data-token="electric piano" title="electric piano" aria-pressed="false" type="button">电钢琴</button>
+              <button class="chip" data-token="acoustic guitar" title="acoustic guitar" aria-pressed="false" type="button">木吉他</button>
+              <button class="chip" data-token="piano" title="piano" aria-pressed="false" type="button">钢琴</button>
+              <button class="chip" data-token="bass" title="bass" aria-pressed="false" type="button">贝斯</button>
+              <button class="chip" data-token="drums" title="drums" aria-pressed="false" type="button">架子鼓</button>
+              <button class="chip" data-token="strings" title="strings" aria-pressed="false" type="button">弦乐组</button>
+              <button class="chip" data-token="analog synth" title="analog synth" aria-pressed="false" type="button">模拟合成器</button>
+            </div></div>
+            <div class="field"><label>人声</label><div class="chipset" data-dim="vocal">
+              <button class="chip" data-token="warm female vocal" title="warm female vocal" aria-pressed="false" type="button">温暖女声</button>
+              <button class="chip" data-token="breathy female vocal" title="breathy female vocal" aria-pressed="false" type="button">气声女声</button>
+              <button class="chip" data-token="soft male vocal" title="soft male vocal" aria-pressed="false" type="button">柔和男声</button>
+              <button class="chip" data-token="warm male vocal" title="warm male vocal" aria-pressed="false" type="button">温暖男声</button>
+            </div></div>
+            <div class="field">
+              <label for="fStyle">风格原文（直接下发给模型）</label>
+              <textarea class="inp mono" id="fStyle" rows="2" data-notr></textarea>
+              <div class="hint">标签只是往这段原文里加词，你也可以直接改。风格词固定以英文下发（官方提示词习惯），切换界面语言不影响它。</div>
+            </div>
+
+            <div class="divider"></div>
+            <div class="inline" style="justify-content:space-between;margin-bottom:var(--sp4)">
+              <h2><svg viewBox="0 0 24 24"><path d="M5 4h14M5 20h9M7 9h11M7 14h7"/></svg>歌词</h2>
+              <button class="btn sm ghost" id="btnLint" type="button">检查结构</button>
+            </div>
+            <div class="field">
+              <textarea class="inp" id="fLyrics" rows="9" data-notr
+                placeholder="[Verse]&#10;晚风轻轻吹过窗前&#10;你留下的笑还在昨天&#10;[Chorus]&#10;让这首歌陪你走远&#10;把所有想念唱成明天"></textarea>
+            </div>
+            <div class="note" id="lintNote" hidden></div>
+            <div class="hint">模型按<b>音节</b>排旋律：单行过长或段落失衡会唱飘。中文每行 7–13 字、副歌重复句式更稳。段落标记 <span class="idn">[Verse]</span> <span class="idn">[Chorus]</span> 是模型词表，不随界面语言翻译。</div>
+            </div>
+
+          <div class="card">
+            <h2><svg viewBox="0 0 24 24"><path d="M4 12h4l3-8 3 16 3-8h3"/></svg>规划模式</h2>
+            <div class="modes" role="group" aria-label="规划模式" style="margin-top:var(--sp4)">
+              <button class="mode" data-cot="full" aria-pressed="true" type="button">
+                <span class="pick"></span>
+                <span class="mt"><svg viewBox="0 0 24 24"><path d="M4 8h16M4 16h16M9 4v16M15 4v16"/></svg><span class="mn">旋律 + 和弦</span></span>
+                <div class="md">规划旋律与和弦，再按谱渲染。新歌默认。</div>
+                <div class="mf y"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 13 4 4L19 7"/></svg>产出可编辑乐谱</div>
+              </button>
+              <button class="mode" data-cot="melody" aria-pressed="false" type="button">
+                <span class="pick"></span>
+                <span class="mt"><svg viewBox="0 0 24 24"><path d="M4 12c3-6 5 6 8 0s5 3 8-3"/></svg><span class="mn">仅旋律</span></span>
+                <div class="md">只规划旋律、不含和弦，伴奏跟着新风格走。翻唱用。</div>
+                <div class="mf y"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 13 4 4L19 7"/></svg>产出旋律谱</div>
+              </button>
+              <button class="mode" data-cot="off" aria-pressed="false" type="button">
+                <span class="pick"></span>
+                <span class="mt"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg><span class="mn">不规划</span></span>
+                <div class="md">跳过符号规划直接生成，最快，但不能改谱。</div>
+                <div class="mf n"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>无乐谱</div>
+              </button>
+            </div>
+
+            <div class="divider"></div>
+            <div class="grid2">
+              <div class="field"><label for="fSeed">随机种子</label>
+                <div class="inline" style="gap:var(--sp2)">
+                  <input class="inp" id="fSeed" placeholder="留空 = 随机" inputmode="numeric" style="flex:1">
+                  <button class="btn" id="btnDice" type="button" aria-label="随机种子">
+                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 8h.01M16 16h.01M12 12h.01"/></svg>
+                  </button>
+                </div></div>
+              <div class="field"><label for="fVar">候选数量</label>
+                <select class="inp" id="fVar">
+                  <option value="1">1 个</option><option value="2">2 个</option>
+                  <option value="3">3 个</option><option value="4">4 个</option>
+                </select>
+                <div class="hint">同一份词与风格，只有种子不同；本机队列逐个跑。</div></div>
+            </div>
+
+            <div class="acc" id="accAdv">
+              <button class="t" type="button" aria-expanded="false" aria-controls="advBody">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6h16M4 12h16M4 18h16M9 3v6M15 9v6M6 15v6"/></svg>
+                高级参数（采样 / 引导 / 解码器）
+                <span class="chev"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+              </button>
+              <div class="body" id="advBody">
+                <div class="inline" style="justify-content:space-between;margin-bottom:var(--sp4)">
+                  <span class="badge" id="advBadge">官方默认</span>
+                  <button class="btn sm ghost" id="btnReset" type="button">全部复位</button>
+                </div>
+                <div class="field"><label>文本引导强度 <span class="idn">cfg_scale</span></label>
+                  <div class="ctl"><div class="row"><span class="dft">越大越贴合风格与歌词，官方按模式给默认值</span></div>
+                    <div class="rowline">
+                      <input type="range" id="sCfg" min="0" max="20" step="0.01" value="1" aria-label="文本引导强度">
+                      <input class="inp num" id="nCfg" data-num type="number" min="0" max="20" step="0.01" inputmode="decimal" aria-label="文本引导强度">
+                      <button class="iconbtn rst" id="rstCfg" type="button" title="恢复默认" aria-label="恢复默认" disabled><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
+                    </div></div></div>
+                <div class="tabs" role="tablist" aria-label="采样阶段">
+                  <button role="tab" aria-selected="true" aria-controls="tab-abc" id="tabBtnAbc" data-tab="abc" type="button">乐谱阶段</button>
+                  <button role="tab" aria-selected="false" aria-controls="tab-sem" id="tabBtnSem" data-tab="sem" type="button" tabindex="-1">语义阶段</button>
+                </div>
+                <div id="tab-abc" class="tabpanel" role="tabpanel" aria-labelledby="tabBtnAbc">
+                  <div class="grid2"><div id="grpAbc"></div><div id="grpAbc2"></div></div>
+                </div>
+                <div id="tab-sem" class="tabpanel" role="tabpanel" aria-labelledby="tabBtnSem" hidden>
+                  <div class="grid2"><div id="grpSem"></div><div id="grpSem2"></div></div>
+                </div>
+                <div class="divider" style="margin:var(--sp4) 0"></div>
+                <div class="grid2">
+                  <div class="ctl"><div class="row"><span class="name">非自回归求解步数 <span class="dft"><span class="idn">ode_steps</span> · 越大越细越慢</span></span></div>
+                    <div class="rowline">
+                      <input type="range" id="sOde" min="1" max="200" step="1" value="32" aria-label="非自回归求解步数">
+                      <input class="inp num" id="nOde" data-num type="number" min="1" max="200" step="1" inputmode="numeric" aria-label="非自回归求解步数">
+                      <button class="iconbtn rst" id="rstOde" type="button" title="恢复默认" aria-label="恢复默认" disabled><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
+                    </div></div>
+                  <div class="field"><label for="fVae">解码器</label>
+                    <div class="rowline">
+                      <select class="inp" id="fVae"></select>
+                      <button class="iconbtn rst" id="rstVae" type="button" title="恢复默认" aria-label="恢复默认" disabled><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
+                    </div>
+                    <div class="hint">同一份潜变量文件可分别解码对比，不必重新生成。</div></div>
+                </div>
+                <div class="note" id="advNote"></div>
+              </div>
+            </div>
+
+            </div>
+        </div>
+
+        <!-- 右：队列 + 当前任务 -->
+        <aside>
+          <div class="card raised" style="margin-bottom:var(--sp5)">
+            <div class="inline" style="justify-content:space-between">
+              <h2>队列</h2><span class="badge" id="qBadge">0 运行 · 0 排队</span>
+            </div>
+            <div id="queue" style="margin-top:var(--sp4)"></div>
+          </div>
+          <div class="card">
+            <h2><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>做完你会得到</h2>
+            <ul style="list-style:none;margin-top:var(--sp4);font-size:14px;color:var(--text2)">
+              <li style="padding:var(--sp2) 0;border-bottom:1px solid var(--hairline)"><span class="tk">✓</span> <b>一首完整歌曲</b> — 48kHz 立体声，可下载可循环试听</li>
+              <li style="padding:var(--sp2) 0;border-bottom:1px solid var(--hairline)"><span class="tk">✓</span> <b>一份乐谱</b> — 在乐谱工作台读谱、检查谱面（不规划模式下没有）</li>
+              <li style="padding:var(--sp2) 0;border-bottom:1px solid var(--hairline)"><span class="tk">✓</span> <b>生成记录</b> — 用过的参数与耗时都在曲库里，可一键复用</li>
+              <li style="padding:var(--sp2) 0;color:var(--text3)"><span class="tk w">!</span> 整曲一次成型：改谱 = 重新渲染全曲，其余小节波形<b>不保留</b></li>
+            </ul>
+          </div>
+        </aside>
+      </div>
+
+      <!-- 常驻操作条：滚到哪一屏都能看到「生成歌曲」 -->
+      <div class="dock" id="dock">
+        <div class="dockrow">
+          <div class="cost" id="cost">
+            <span>预计耗时</span><b id="costT" class="mono">—</b>
+            <span style="color:var(--text3)">· 队列前 <b id="costQ" class="mono">0</b> 个任务</span>
+            <span class="brk" id="costBrk" role="button" tabindex="0">耗时构成 ▾</span>
+            <ul id="costUl"></ul>
+          </div>
+          <button class="btn primary big" id="btnGen" type="button">
+            <svg viewBox="0 0 24 24"><path d="M4 12h4l3-8 3 16 3-8h3" stroke-linecap="round"/></svg>
+            生成歌曲 <kbd>Ctrl</kbd><kbd>↵</kbd>
+          </button>
+          <button class="btn sm ghost" id="btnPlan" type="button"
+            title="先花约 1 分钟看到乐谱，满意再点卡上的「渲染成歌」">只出谱（约 1 分钟）</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- SCORE ---------- -->
+    <section class="view" id="v-score" aria-labelledby="score-h">
+      <div class="vhead">
+        <div class="inline" style="justify-content:space-between;align-items:flex-start;gap:var(--sp4);flex-wrap:wrap">
+          <div><h1 id="score-h">乐谱工作台</h1>
+            <p>白盒核心：读谱 → 改谱 → 逐音符校验 → 重新渲染。改错了 8 分多钟就白费，所以校验在生成<b>之前</b>。</p></div>
+          <div class="inline" style="gap:var(--sp2);flex-wrap:wrap">
+            <select class="inp" id="scoreJob" aria-label="选择任务" style="min-height:40px;max-width:340px"></select>
+            <button class="btn sm" id="btnInspect" type="button">检查谱面</button>
+            <a class="btn sm ghost" id="btnAbcDl" href="#" download style="text-decoration:none">下载 score.abc</a>
+            <button class="btn sm primary" id="btnRerender" type="button"
+              title="按右侧改好的谱面整曲重新渲染（约 10 分钟）">改谱重渲染</button>
+          </div>
+        </div>
+      </div>
+      <div class="note" id="scoreNote" hidden></div>
+      <div class="toolrow">
+        <div class="seg" role="tablist" aria-label="乐谱视图">
+          <button id="tabRoll" role="tab" aria-selected="true" class="on" type="button">音块图</button>
+          <button id="tabText" role="tab" aria-selected="false" type="button">文本谱</button>
+        </div>
+        <span class="sub" id="rollHint">拖动音块改音高与长短，选中按 Delete 删音；Ctrl+滚轮缩放</span>
+        <span class="toolacts">
+          <button class="btn sm ghost" id="btnCompare" type="button" disabled>对比原谱</button>
+          <button class="btn sm ghost" id="btnStrip" type="button" disabled>去掉和弦</button>
+          <button class="btn sm ghost" id="btnInstr" type="button" disabled>转纯音乐谱</button>
+          <button class="btn sm ghost" id="btnRollFull" type="button" aria-pressed="false"
+            title="铺满窗口看谱（Esc 退出）">
+            <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+            <span id="btnRollFullTx">全屏</span>
+          </button>
+        </span>
+      </div>
+      <div class="note" id="rollNote" hidden></div>
+      <div class="note" id="toolNote" hidden></div>
+      <div class="cols" style="--colsR:360px;margin-top:var(--sp4)">
+        <div class="paper">
+          <div class="ph"><span class="pd"></span><span id="abcName" data-notr>score.abc</span>
+            <span style="margin-left:auto" class="mono" id="abcMeta" data-notr></span></div>
+          <div class="rollgrid" id="rollGrid" hidden>
+            <div class="rollscroll" id="rollScroll">
+              <canvas id="rollAxis" aria-hidden="true"></canvas>
+              <canvas id="rollCanvas" tabindex="0" aria-label="音块图：上下拖动改音高，拖右边缘改长短"></canvas>
+            </div>
+          </div>
+          <div class="rollbar" id="rollBar" hidden>
+            <span id="rollSel" data-notr>没有选中音符</span>
+            <span style="flex:1"></span>
+            <span class="zoom" role="group" aria-label="缩放">
+              <span class="zgrp"><i>横</i>
+                <button class="zbtn" id="zoomXOut" type="button" aria-label="横向缩小" title="横向缩小（Ctrl+滚轮↓）">−</button>
+                <b class="zval mono" id="zoomXVal" data-notr>100%</b>
+                <button class="zbtn" id="zoomXIn" type="button" aria-label="横向放大" title="横向放大（Ctrl+滚轮↑）">＋</button>
+              </span>
+              <span class="zgrp"><i>行</i>
+                <button class="zbtn" id="zoomYOut" type="button" aria-label="行高缩小" title="行高缩小（Ctrl+Shift+滚轮↓）">−</button>
+                <b class="zval mono" id="zoomYVal" data-notr>100%</b>
+                <button class="zbtn" id="zoomYIn" type="button" aria-label="行高放大" title="行高放大（Ctrl+Shift+滚轮↑）">＋</button>
+              </span>
+              <button class="zbtn zfit" id="zoomFit" type="button" title="重置缩放（0）">适应</button>
+            </span>
+            <span class="mono" id="rollMeta" data-notr></span>
+          </div>
+          <div class="edwrap" id="edwrap">
+            <div class="gutter mono" id="gut" aria-hidden="true"></div>
+            <pre class="mono" id="abcHl" aria-hidden="true"></pre>
+            <textarea class="mono" id="abcEd" spellcheck="false" data-notr
+              aria-label="ABC 乐谱（可直接编辑）" title="乐谱可以直接改：改完点「改谱重渲染」"></textarea>
+          </div>
+        </div>
+        <aside>
+          <div class="card" style="margin-bottom:var(--sp4)">
+            <h2><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16M9 3v6M15 9v6M6 15v6"/></svg>谱面信息</h2>
+            <div class="insp" style="margin-top:var(--sp4)" id="abcInsp"></div>
+          </div>
+          <div class="card" id="cardQuick" style="margin-bottom:var(--sp4)">
+            <h2><svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>快速调整</h2>
+            <div style="margin-top:var(--sp4)">
+              <div class="lbl">整曲移调（半音）</div>
+              <div class="inline" style="gap:var(--sp2)">
+                <button class="btn sm ghost" id="trDown12" type="button">-12</button>
+                <button class="btn sm ghost" id="trDown" type="button">-1</button>
+                <button class="btn sm ghost" id="trUp" type="button">+1</button>
+                <button class="btn sm ghost" id="trUp12" type="button">+12</button>
+              </div>
+            </div>
+            <div style="margin-top:var(--sp4)">
+              <div class="lbl">速度</div>
+              <div class="inline" style="gap:var(--sp2)">
+                <input class="inp num" id="rollBpm" type="number" min="20" max="300" step="1"
+                  inputmode="numeric" aria-label="速度 BPM" style="width:96px">
+                <span class="sub">BPM</span>
+                <button class="btn sm" id="btnBpm" type="button">应用</button>
+              </div>
+            </div>
+            <div style="margin-top:var(--sp4)">
+              <div class="lbl">段落</div>
+              <select class="inp" id="rollSection" aria-label="选择段落" style="min-height:36px"></select>
+              <div class="inline" style="gap:var(--sp2);margin-top:var(--sp2)">
+                <button class="btn sm ghost" id="btnSecDup" type="button">复制这一段</button>
+                <button class="btn sm ghost" id="btnSecDrop" type="button">删掉这一段</button>
+              </div>
+            </div>
+            <div class="inline" style="margin-top:var(--sp4)">
+              <button class="btn sm ghost" id="btnRevert" type="button">恢复原谱</button>
+            </div>
+          </div>
+          <div class="card">
+            <h2><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>怎么改</h2>
+            <ul class="tips">
+              <li>上下拖音块 = 改音高，拖一下就是一格（一个半音）</li>
+              <li>拖音块右边缘 = 改长短，后面得有休止符腾地方</li>
+              <li>点一下选中，按 Delete 删音；↑↓ 微调，Shift+↑↓ 一个八度</li>
+              <li>改错了按 Ctrl+Z 撤回；改完点顶部「改谱重渲染」才会变成音频</li>
+            </ul>
+            <details class="tipmore">
+              <summary>谱面里的记法</summary>
+              <ul class="tips">
+                <li>人声旋律写在 V: Vocal，伴奏写在 V: Ins</li>
+                <li>引号里的是和弦标记，例如 "Cmaj7"，只影响伴奏</li>
+                <li>z 是休止符，竖线是小节线，Q: 是速度</li>
+                <li>官方脚本只认这种原生写法，通用 ABC 会被拒</li>
+              </ul>
+            </details>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ---------- LIBRARY ---------- -->
+    <section class="view" id="v-library" aria-labelledby="lib-h">
+      <div class="vhead">
+        <div class="inline" style="justify-content:space-between;align-items:flex-start;gap:var(--sp4);flex-wrap:wrap">
+          <div><h1 id="lib-h">曲库</h1><p>每次生成 = 一条带谱系的任务。选 2 条进入 A/B 盲听对比。</p></div>
+          <div class="inline">
+            <button class="btn sm" id="btnAB" type="button" disabled data-notr>A/B 对比（0）</button>
+            <button class="btn sm ghost" id="btnReload" type="button">刷新</button>
+          </div>
+        </div>
+        <div class="inline" style="margin-top:var(--sp4);gap:var(--sp2);flex-wrap:wrap">
+          <input class="inp" id="libSearch" placeholder="搜索风格 / 编号 / 标题 / 歌词" style="max-width:340px;min-height:40px">
+          <select class="inp" id="libSort" aria-label="排序" style="min-height:40px;min-width:132px;width:auto">
+            <option value="new">最新优先</option><option value="old">最早优先</option>
+            <option value="long">时长最长</option><option value="eff">耗时最长</option>
+          </select>
+          <button class="chip" aria-pressed="true" data-filter="" type="button">全部</button>
+          <button class="chip" aria-pressed="false" data-filter="complete" type="button">已完成</button>
+          <button class="chip" aria-pressed="false" data-filter="truncated" type="button">有截断</button>
+          <button class="chip" aria-pressed="false" data-filter="failed" type="button">失败</button>
+          <button class="chip" aria-pressed="false" data-filter="favorite" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.6 6.2.9-4.5 4.4 1 6.1-5.5-2.9-5.5 2.9 1-6.1L3 9.5l6.2-.9z"/></svg>收藏</button>
+        </div>
+      </div>
+      <div class="grid" id="libGrid"></div>
+      <div class="note" id="libEmpty" hidden></div>
+    </section>
+
+    <!-- ---------- GUIDE ---------- -->
+    <section class="view" id="v-guide" aria-labelledby="guide-h">
+      <div class="vhead">
+        <h1 id="guide-h">教程：从零到一首歌</h1>
+        <p>一条链路走完创作、试听、改谱。卡住了就回这一页，或者重播界面巡览。</p>
+        <div class="inline" style="margin-top:var(--sp4)">
+          <button class="btn sm primary" id="btnReplayTour" type="button">重播界面巡览</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:var(--sp5)">
+        <h2><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>先听内置示例</h2>
+        <div class="sub" id="demoNote" style="margin-top:var(--sp2)">示例曲正在读取…</div>
+        <div class="inline" style="margin-top:var(--sp4);gap:var(--sp2);flex-wrap:wrap">
+          <button class="btn" id="btnDemoPlay" type="button" disabled>试听示例</button>
+          <button class="btn ghost" id="btnDemoUse" type="button" disabled>用示例参数开始</button>
+          <button class="btn ghost" id="btnDemoScore" type="button" disabled>看示例乐谱</button>
+        </div>
+      </div>
+
+      <div class="lesson">
+        <div class="lh"><span class="ln">01</span><div><h2>写词与风格</h2><p>风格决定编曲与音色，歌词决定旋律节奏。</p></div></div>
+        <div class="flow">
+          <div class="fstep"><b>风格 + 歌词</b><span>语言、流派、乐器、BPM；按段落写词</span></div>
+          <span class="farrow" aria-hidden="true">→</span>
+          <div class="fstep"><b>可改乐谱</b><span>旋律与和弦先落成谱面</span></div>
+          <span class="farrow" aria-hidden="true">→</span>
+          <div class="fstep"><b>完整歌曲</b><span>48kHz 立体声，可试听可下载</span></div>
+        </div>
+        <ul class="ticks">
+          <li>点「载入范例」先拿一套能跑的词与风格，再改成自己的。</li>
+          <li>中文每行 7–13 字，用 [Verse] / [Chorus] 标段落。</li>
+          <li>「检查结构」会指出空段落、过长行和缺副歌。</li>
+        </ul>
+      </div>
+
+      <div class="lesson">
+        <div class="lh"><span class="ln">02</span><div><h2>选规划模式</h2><p>决定要不要乐谱，以及要不要理会和弦。</p></div></div>
+        <div style="overflow-x:auto"><table class="tbl">
+          <thead><tr><th style="width:26%">模式</th><th>产出</th><th style="width:34%">适合</th></tr></thead>
+          <tbody>
+            <tr><td>旋律 + 和弦</td><td>可编辑乐谱 + 完整歌曲</td><td>新歌默认，想改谱就选它</td></tr>
+            <tr><td>仅旋律</td><td>旋律谱 + 完整歌曲</td><td>换编曲、做翻唱片</td></tr>
+            <tr><td>不规划</td><td>只有完整歌曲</td><td>最快出结果，不打算改谱</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <div class="lesson">
+        <div class="lh"><span class="ln">03</span><div><h2>试听与迭代</h2><p>生成只是开始，后面四件事最常用。</p></div></div>
+        <ul class="ticks">
+          <li><b>试听与下载</b>：任务卡上直接试听；下载得到 FLAC 无损文件。</li>
+          <li><b>收藏与 A/B</b>：曲库里选两条有音频的任务，切换 A/B 时播放位置不变。</li>
+          <li><b>改谱重渲染</b>：乐谱工作台改完点「改谱重渲染」，整曲按新谱重跑，耗时和生成一首相同。</li>
+          <li><b>复用参数</b>：详情里点「复制参数到创作」，风格、歌词、种子、高级参数与设备一起回填。</li>
+        </ul>
+      </div>
+
+      <div class="lesson">
+        <div class="lh"><span class="ln">04</span><div><h2>硬件与等待</h2><p>本机并发恒为 1，时间都花在自回归生成上。</p></div></div>
+        <ul class="ticks">
+          <li>第一次生成会先加载模型，约 1 分钟。</li>
+          <li>8GB 显卡能跑短歌；显存不足时自动降级到 CPU，会慢很多。</li>
+          <li>预计耗时按本机实测和歌词篇幅折算，基准任务编号会写在耗时构成里。</li>
+          <li>生成中可以离开创作页，按 1–5 切换视图，完成后右下角会提示。</li>
+        </ul>
+      </div>
+
+      <div class="lesson">
+        <div class="lh"><span class="ln">05</span><div><h2>边界与授权</h2><p>这些限制来自官方模型与代码，界面无法绕过。</p></div></div>
+        <ul class="ticks">
+          <li>没有音色克隆：音色只能用风格词描述，不能上传参考音频。</li>
+          <li>不支持局部修补：改一个音也要整曲重渲染。</li>
+          <li>歌曲长度有上限，超出会截断，任务卡上会标「截断」。</li>
+          <li>模型权重是 CC BY-NC 4.0：非商业使用；分发前先看部署文档里的授权说明。</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ---------- SYSTEM ---------- -->
+    <section class="view" id="v-system" aria-labelledby="sys-h">
+      <div class="vhead"><h1 id="sys-h">系统与模型</h1><p>模型常驻在独立工作进程里；卸载即结束该进程，显存彻底释放。</p></div>
+      <div class="cols">
+        <div>
+          <div class="card" style="margin-bottom:var(--sp5)">
+            <div class="inline" style="justify-content:space-between">
+              <h2><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg>模型状态</h2>
+              <span class="badge" id="sysState">未加载</span>
+            </div>
+            <div class="insp" style="margin-top:var(--sp4)" id="sysModel"></div>
+            <div class="inline" style="margin-top:var(--sp4);flex-wrap:wrap">
+              <button class="btn primary" id="btnLoadCpu" type="button">加载到 CPU</button>
+              <button class="btn" id="btnLoadGpu" type="button">加载到 GPU</button>
+              <button class="btn ghost" id="btnUnload" type="button" disabled>卸载</button>
+              <span class="sub" style="margin-left:auto" id="sysLoadNote"></span>
+            </div>
+            <div class="note" id="sysGpuNote" style="margin-top:var(--sp4)" hidden></div>
+          </div>
+          <div class="card">
+            <div class="inline" style="justify-content:space-between">
+              <h2><svg viewBox="0 0 24 24"><path d="m5 13 4 4L19 7"/></svg>环境自检</h2>
+              <button class="btn sm ghost" id="btnDoctor" type="button">重新检测</button>
+            </div>
+            <div class="sub" style="margin:var(--sp2) 0 var(--sp4)">命令 <span class="idn" data-notr>yue2 doctor</span> · <span id="sysDocSum">未检测</span></div>
+            <div style="overflow-x:auto"><table class="tbl"><tbody id="sysDoctor"></tbody></table></div>
+          </div>
+        </div>
+        <aside>
+          <div class="card" style="margin-bottom:var(--sp4)">
+            <div class="inline" style="justify-content:space-between">
+              <h2><svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>生成加速</h2>
+              <button class="btn sm ghost" id="btnAccelReset" type="button">恢复默认</button>
+            </div>
+            <div class="sub" style="margin:var(--sp2) 0 var(--sp4)">默认关闭。开关只影响下一个任务，正在生成的歌曲不受影响。</div>
+            <div id="sysAccel" style="display:grid;gap:var(--sp4)"></div>
+          </div>
+          <div class="card" style="margin-bottom:var(--sp4)">
+            <h2><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/></svg>本机能力开关</h2>
+            <div style="margin-top:var(--sp4);display:grid;gap:var(--sp3);font-size:14px" id="sysCaps"></div>
+          </div>
+          <div class="card">
+            <h2><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 10h16M10 10v10"/></svg>存储与约束</h2>
+            <div class="insp" style="margin-top:var(--sp4)" id="sysStore"></div>
+            <div class="hint" style="margin-top:var(--sp3)">任务状态以磁盘上的结果文件与失败文件为准，重启自动恢复；SQLite 索引只存界面字段，可随时重建。</div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ LYRICS ============ -->
+  <section class="lyr" id="lyr" aria-label="歌词">
+    <div class="lyrBody" id="lyrBody">
+      <div class="lyrStage" id="lyrStage">
+        <div class="lyrSide" id="lyrPrev" data-notr></div>
+        <div class="lyrNow empty" id="lyrNow" data-notr></div>
+        <div class="lyrSide" id="lyrNext" data-notr></div>
+      </div>
+      <div class="lyrList" id="lyrList" role="list"></div>
+    </div>
+    <button class="btn sm ghost lyrRetry" id="lyrRetry" type="button" hidden>重试对齐</button>
+    <button class="lyrTg" id="lyrTg" type="button" aria-expanded="false" aria-controls="lyrBody"
+      aria-label="展开歌词" title="展开歌词">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
+      <span>歌词</span>
+    </button>
+  </section>
+
+  <!-- ============ TRANSPORT ============ -->
+  <footer class="trans">
+    <button class="tskip" id="prevBtn" type="button" aria-label="上一首" title="上一首" disabled>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6v12l-9-6z"/><path d="M5 6v12"/></svg>
+    </button>
+    <button class="pp" id="ppBtn" type="button" aria-label="播放或暂停" disabled>
+      <svg viewBox="0 0 16 16" id="ppIcon"><path d="M4 2l10 6-10 6z"/></svg>
+    </button>
+    <button class="tskip" id="nextBtn" type="button" aria-label="下一首" title="下一首" disabled>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6v12l9-6z"/><path d="M19 6v12"/></svg>
+    </button>
+    <div class="tmeta"><div class="tn" id="tName" data-notr>未选择曲目</div><div class="ts" id="tSub" data-notr>—</div></div>
+    <div class="tprog">
+      <span class="tm" id="tCur">0:00</span>
+      <div class="track"><div class="wave" id="wave" role="slider"
+        aria-label="播放进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0"></div></div>
+      <span class="tm" id="tDur">0:00</span>
+    </div>
+    <div class="ab" role="group" aria-label="A/B 对比">
+      <button class="on" data-ab="a" type="button">A</button><button data-ab="b" type="button" disabled>B</button>
+    </div>
+    <div class="vol"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/></svg>
+      <input type="range" id="volR" min="0" max="100" value="90" aria-label="音量"></div>
+    <button class="tdl" id="dlBtn" type="button" aria-label="下载音频" title="下载音频" disabled>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10m0 0 4.2-4.2M12 14 7.8 9.8M5 19.5h14"/></svg>
+    </button>
+  </footer>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+<div class="tour" id="tour" hidden>
+  <div class="tourHole" id="tourHole" aria-hidden="true"></div>
+  <div class="tourCard" id="tourCard" role="dialog" aria-modal="true" aria-labelledby="tourTitle" aria-live="polite">
+    <div class="tourStep" id="tourStep"></div>
+    <h3 id="tourTitle"></h3>
+    <p id="tourBody"></p>
+    <div class="tourFoot">
+      <button class="btn sm ghost" id="tourSkip" type="button">跳过</button>
+      <span style="flex:1"></span>
+      <button class="btn sm ghost" id="tourPrev" type="button">上一步</button>
+      <button class="btn sm primary" id="tourNext" type="button">下一步</button>
+    </div>
+  </div>
+</div>
+<div class="scrim" id="scrim"></div>
+<div class="modal" id="keysModal" role="dialog" aria-modal="true" aria-labelledby="keysH" aria-hidden="true" tabindex="-1">
+  <div class="mh"><h3 id="keysH">键盘快捷键</h3>
+    <button class="iconbtn" id="keysX" type="button" aria-label="关闭" style="margin-left:auto">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="mb"><table class="tbl"><tbody>
+    <tr><td style="width:40%">切换视图</td><td><kbd>1</kbd>–<kbd>5</kbd></td></tr>
+    <tr><td>生成歌曲</td><td><kbd>Ctrl</kbd> + <kbd>回车</kbd></td></tr>
+    <tr><td>播放 / 暂停</td><td><kbd>空格</kbd>（输入框、按钮上不触发）</td></tr>
+    <tr><td>切换界面语言</td><td><kbd>L</kbd></td></tr>
+    <tr><td>切换深浅色主题</td><td><kbd>T</kbd></td></tr>
+    <tr><td>关闭弹层</td><td><kbd>Esc</kbd></td></tr>
+    <tr><td>本帮助</td><td><kbd>?</kbd></td></tr>
+  </tbody></table>
+  <div class="hint">界面语言只翻译操作文字；文件名、参数名、歌词与歌名属于数据，不翻译。</div></div>
+</div>
+<div class="modal" id="jobModal" role="dialog" aria-modal="true" aria-labelledby="jobH" aria-hidden="true" tabindex="-1">
+  <div class="mh"><h3 id="jobH">任务详情</h3>
+    <button class="iconbtn" type="button" aria-label="关闭" data-close style="margin-left:auto">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="mb" id="jobBody"></div>
+  <div class="mfb" id="jobFoot"></div>
+</div>
+<div class="modal" id="logModal" role="dialog" aria-modal="true" aria-labelledby="logH" aria-hidden="true" tabindex="-1">
+  <div class="mh"><h3 id="logH">任务日志</h3>
+    <button class="iconbtn" type="button" aria-label="关闭" data-close style="margin-left:auto">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="mb">
+    <div class="sub" style="margin-bottom:var(--sp3)"><span class="mono" data-notr id="logPath"></span></div>
+    <pre class="logbox mono" id="logBox" data-notr></pre>
+  </div>
+  <div class="mfb"><button class="btn ghost" type="button" data-close>关闭</button>
+    <button class="btn ghost" type="button" id="logReveal">打开任务目录</button></div>
+</div>
+<audio id="player" preload="metadata"></audio>
+<script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

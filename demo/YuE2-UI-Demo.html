@@ -1,0 +1,1771 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YuE2 音乐工作台 · 界面演示</title>
+<script>
+/* 主题与语言在首帧前落定，避免闪白/闪黑 */
+(function(){try{
+  var t=localStorage.getItem("yue2.theme")||
+    (matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");
+  document.documentElement.dataset.theme=t;
+  document.documentElement.lang=localStorage.getItem("yue2.lang")==="en"?"en":"zh-CN";
+}catch(e){}})();
+</script>
+<script>
+/* ============ 双语 + 深浅色引擎 ============
+   代码里只写中文（唯一真源）；英文是运行时覆盖层：
+   EN 命中才替换，未命中退回中文，不会产生空标签。
+   文件名 / 参数名 / 歌词 / 曲名是数据，用 data-notr 排除。
+   动态区域由主脚本重渲染（T() 读当前语言），不做字符串反向还原。 */
+"use strict";
+const EN={
+/* --- 标题 / 导航 / 顶栏 --- */
+"YuE2 音乐工作台 · 界面演示":"YuE2 Music Workstation · UI Demo",
+"演示界面 · 假数据":"UI demo · fake data",
+"演示：全部为假数据，不连后端、不产音频，按钮交互均为本地模拟。":"Demo: every value is fake, no backend, no audio; all buttons are simulated locally.",
+"工作区":"Workspace","本机":"This machine","创作":"Create","乐谱工作台":"Score workbench",
+"批量":"Batch","批量生成":"Batch generation","曲库":"Library","系统":"System","系统与模型":"System & model",
+"单任务队列":"One job at a time","CPU 实测每首约 8 分 30 秒":"Measured on CPU: about 8 min 30 s per song",
+"模型未加载 · 只能用 CPU（3060 Ti 8GB 显存不足）":"Model not loaded · CPU only (a 3060 Ti with 8 GB has no room for VRAM)",
+"运行设备":"Runtime device","界面语言":"Interface language","切换深浅色主题":"Toggle light / dark theme",
+"切换深浅色主题（快捷键 T）":"Toggle light / dark theme (shortcut T)","快捷键说明":"Keyboard shortcuts",
+"创作一首歌":"Create a song","播放 / 暂停":"Play / pause","切换界面语言":"Switch interface language",
+"切换视图":"Switch view","生成歌曲":"Generate song","关闭弹层":"Close this dialog","本帮助":"This help",
+"回车":"Enter","空格":"Space","（输入框内不触发）":"(not while typing)","键盘快捷键":"Keyboard shortcuts",
+"关闭":"Close","主导航":"Main navigation","播放或暂停":"Play or pause","播放进度":"Playback position",
+"音量":"Volume","A/B 对比":"A/B comparison","A/B 对比（":"A/B comparison (",
+/* --- 规划模式 --- */
+"规划模式":"Planning mode","旋律 + 和弦":"Melody + chords","仅旋律":"Melody only","不规划":"No planning",
+"规划旋律与和弦，再按谱渲染。新歌默认。":"Plans melody and chords, then renders from that score. Default for a new song.",
+"只规划旋律、不含和弦，伴奏跟着新风格走。翻唱用。":"Plans the melody only, no chords; the accompaniment follows the new style. Use it for covers.",
+"跳过符号规划直接生成，最快，但不能改谱。":"Skips symbolic planning and generates straight away — fastest, but there is no score to edit.",
+"产出可编辑乐谱":"Gives an editable score","产出旋律谱":"Gives a melody score","无乐谱":"No score",
+"写风格与歌词 → 模型先出":"Write the style and lyrics, the model first gives you a ",
+"可读可改的乐谱":"readable, editable score",
+"→ 渲染 48kHz 立体声完整歌曲。本机只能用 CPU，每首约 8 分 30 秒。":" → then renders the full 48 kHz stereo song. This machine is CPU-only: about 8 min 30 s per song.",
+/* --- 风格 --- */
+"风格描述":"Style","载入范例":"Load example","文本模式":"Text mode","字段模式":"Field mode",
+"语言":"Language","中文":"Chinese","英文":"English","粤语":"Cantonese","日语":"Japanese",
+"速度":"Tempo","流派":"Genre","乐器":"Instruments","人声":"Vocals",
+"城市流行":"City pop","不插电流行":"Acoustic pop","爵士放克":"Jazz-funk","民谣叙事":"Folk ballad",
+"合成器浪潮":"Synthwave","华语摇滚":"Mandarin rock",
+"电钢琴":"Electric piano","木吉他":"Acoustic guitar","贝斯":"Bass","架子鼓":"Drums","弦乐组":"Strings","萨克斯":"Saxophone",
+"温暖女声":"Warm female vocal","气声女声":"Breathy female vocal","温暖男声":"Warm male vocal","男女对唱":"Male / female duet",
+"风格原文（直接下发给模型）":"Style text (sent to the model as is)",
+"字段模式与文本模式双向同步。切到文本模式可写任意描述，例如加入演奏提示、情绪、混音质感。":"Fields and free text stay in sync. Switch to text mode to write anything: playing notes, mood, mix texture.",
+"当前拼接结果：":"Current prompt:","风格词固定以英文下发（官方提示词习惯），悬停标签可见原文；切换界面语言不影响它。":"Style words are always sent in English (the official prompt convention); hover a tag to see it. The UI language never changes this.",
+/* --- 歌词 --- */
+"歌词":"Lyrics","+ 段落":"+ section","检查结构":"Check structure",
+"模型按":"The model sets the melody by ","音节":"syllable",
+"排旋律：单行过长或段落失衡会唱飘。中文每行 7–13 字、副歌重复句式更稳。段落标记":", so an over-long line or an unbalanced section sings off. In Chinese, 7–13 characters per line and a repeated chorus hook hold up best. Section markers ",
+"是模型词表，不随界面语言翻译。":"are model vocabulary and keep their wording in both languages.",
+"随机种子":"Random seed","留空 = 随机":"Leave blank = random","候选数量":"Candidates",
+"1 个 · 约 8 分 30 秒":"1 · about 8 min 30 s","2 个 · 约 17 分钟":"2 · about 17 min",
+"3 个 · 约 26 分钟":"3 · about 26 min","4 个 · 约 34 分钟":"4 · about 34 min",
+"段落":"Sections","上移段落":"Move section up","删除段落":"Delete section","段落歌词":"lyrics",
+"{0} 行":"{0} lines","默认值 {0}":"default {0}",
+/* --- 高级参数 --- */
+"高级参数（采样 / 引导 / 解码器 / 运行环境）":"Advanced (sampling / guidance / decoder / runtime)",
+"官方默认":"Official defaults","全部复位":"Reset all","文本引导强度":"Text guidance strength",
+"越大越贴合风格与歌词，官方按模式给默认值":"Higher sticks closer to the style and lyrics; the official default depends on the mode",
+"乐谱阶段":"Score stage","语义阶段":"Semantic stage",
+"非自回归求解步数":"Non-autoregressive solver steps","· 越大越细越慢":"· more steps = finer and slower",
+"解码器":"Decoder","YuE2-Vae（试听 · 默认）":"YuE2-Vae (preview · default)","YuE2-Vae-legacy（复现论文基准）":"YuE2-Vae-legacy (paper baseline)",
+"同一份潜变量文件可分别解码对比，不必重新生成。":"One latent file can be decoded twice for comparison — no need to regenerate.",
+"、":", ","由官方代码硬校验，":"are hard-checked by the official code and shown ",
+"只读":"read-only","展示，改不了也不该改。":"— you cannot change them, and should not.",
+"显存配额":"VRAM quota","（GiB）":"(GiB)","≤12 自动切到 512 帧小规格解码器分块。":"At 12 or below it automatically uses 512-frame small-mode decoder chunks.",
+"权重精度":"Weight precision","不量化（本机唯一可用）":"No quantization (the only option here)","FP8（本机不支持）":"FP8 (unsupported here)",
+"官方明确不承诺量化后的质量与速度。":"The official README promises nothing about quantized quality or speed.",
+"分阶段驻留":"Staged residency","关闭 CUDA 计算图":"CUDA graphs off","仅用本地模型":"Local models only",
+/* --- 成本条 --- */
+"预计耗时":"Estimated time","· 队列前":"· ahead in queue","个任务":"tasks","耗时构成 ▾":"Time breakdown ▾",
+"规划乐谱（约 4096 词元）":"Score planning (about 4096 tokens)","约 53 秒":"about 53 s",
+"语义生成（最长 9000 词元，CPU 自回归）":"Semantic generation (up to 9000 tokens, autoregressive on CPU)","约 5 分 10 秒":"about 5 min 10 s",
+"非自回归合成（流匹配 · 32 步）":"Non-autoregressive synthesis (flow matching · 32 steps)","约 1 分 40 秒":"about 1 min 40 s",
+"解码导出 FLAC（48kHz 立体声）":"Decode and export FLAC (48 kHz stereo)","约 47 秒":"about 47 s",
+"本机实测基准":"Measured on this machine","42.3 秒音频 / 耗时 509 秒":"42.3 s of audio / 509 s elapsed",
+"生成期间可离开本页，任务在后台队列继续。":"You can leave this page while it runs; the background queue carries on.",
+/* --- 队列侧栏 --- */
+"队列":"Queue","1 运行 · 1 排队":"1 running · 1 queued","这个任务会给你什么":"What this task gives you",
+"— 48kHz 立体声成品":"— the 48 kHz stereo master","— 可编辑乐谱（off 模式没有）":"— the editable score (absent in off mode)",
+"— 中间产物，可重解码不换曲子":"— intermediates: re-decode without regenerating","— 生效参数、耗时、权重 SHA256、truncated":"— effective parameters, timing, weight SHA256, truncated",
+"整曲一次成型：改谱 = 重新渲染全曲，其余小节波形":"The whole song is rendered in one pass: editing the score re-renders everything, and the other bars' waveforms ",
+"不保留":"are not kept",
+/* --- 乐谱工作台 --- */
+"← 回创作":"← Back to create",
+"白盒核心：读谱 → 改谱 → 逐音符校验 → 重新渲染。改错了 8 分多钟就白费，所以校验在生成":"The core is a white box: read the score → edit it → verify note by note → re-render. One bad edit wastes 8+ minutes, so verification happens ",
+"之前":"before","。":".","、":"、",
+"原始完整谱":"original full score","改和声 + 提速到 96":"Reharmonised + tempo up to 96","渲染中":"Rendering",
+"（改动未保存 · 1 处）":"(unsaved · 1 change)",
+"人声 + 伴奏双声部 · 原生 ABC 方言":"Vocal + accompaniment, two parts · native ABC dialect",
+"重载原始谱":"Reload original score","ABC 乐谱源码编辑器":"ABC score source editor",
+"结构校验":"Structure check","实时解析，复用官方":"Parsed live, reusing the official",
+"拍号":"Meter","调号":"Key","小节":"Bars","音符":"Notes","和弦标记":"Chord markers","C 大调":"C major",
+"主歌 ×4":"Verse x4","副歌 ×4":"Chorus x4","无前奏 / 尾奏":"No intro / outro",
+"语法与声部完整，可直接渲染。":"Syntax and both parts are complete; ready to render.",
+"与原始谱对比":"Compare with the original score","按音乐事件比，不是比字符串":"Compared by musical events, not by characters",
+"小节 1–4 · 人声旋律音高与时值一致":"Bars 1–4 · vocal pitch and durations identical",
+"− 小节 5–8 和弦":"− bars 5–8 chords","+ 小节 5–8 和弦":"+ bars 5–8 chords","（新增）":"(new)",
+"小节 9–16 · 两个声部一致":"Bars 9–16 · both parts identical",
+"允许速度变化（":"Allow tempo changes (","）":")",
+"下一步":"Next","① 只出谱，不渲染":"① Score only, no render","② 按这份谱重新渲染":"② Re-render from this score",
+"③ 去和弦 → 改用「仅旋律」（翻唱）":"③ Strip chords → render as melody only (cover)","④ 器乐化：人声移到伴奏声部":"④ Instrumentalise: move the vocals to the accompaniment",
+"每个动作都生成":"Every action creates a ","新任务":"new task","并挂在谱系上，原任务与音频不受影响。":"in the lineage; the original task and its audio stay untouched.",
+/* --- 批量 --- */
+"每行一个请求，编号必须唯一。本机后端":"One request per line, ids must be unique. On this machine the backend ",
+"并发恒为 1":"concurrency is fixed at 1","，逐个跑；失败行保留":", so jobs run one at a time; a failed line keeps ",
+"不阻塞后续。":"and does not block the rest.",
+"songs.jsonl · 6 行":"songs.jsonl · 6 lines","校验通过 6/6":"6/6 lines valid",
+"导入清单文件":"Import manifest","校验已完成任务":"Verify finished tasks","全部排队":"Queue all",
+"编号":"ID","模式":"Mode","种子":"Seed","状态":"Status","操作":"Actions","随机":"Random",
+"全部生成预计":"Estimated total","8 分 30 秒":"8 min 30 s","51 分钟":"51 min",
+"FP8 需计算能力 ≥8.9（RTX 40 系及以后），本机 3060 Ti 为 8.6，不可用":"FP8 needs compute capability 8.9+ (RTX 40 series and newer); this 3060 Ti is 8.6, so it is unavailable","= 6 首 × 8 分 30 秒（CPU，无排队）":"= 6 songs x 8 min 30 s (CPU, nothing queued)",
+"更省的方案 ▾":"Cheaper options ▾","先只出谱，批量看结构":"Score only first, review structures in batch","6 首约 5 分钟":"6 songs in about 5 min",
+"用「不规划」模式跳过谱面":"Skip the score with no-planning mode","每首省约 53 秒":"saves about 53 s per song",
+"官方 24GB 显卡口径":"Official 24 GB GPU figures","本机未验证":"not verified here",
+/* --- 曲库 --- */
+"每次生成 = 一条带谱系的任务。选 2–4 条进入 A/B 盲听对比。":"Every generation is one task in a lineage. Pick 2–4 for an A/B blind test.",
+"搜索风格 / 编号 / 歌词关键词":"Search style / ID / lyric keyword","全部":"All","已完成":"Done","有截断":"Truncated","失败":"Failed","收藏":"Favorite",
+"回收站":"Trash",
+/* --- 系统 --- */
+"模型常驻在独立工作进程里；卸载即结束该进程，显存彻底释放。":"The model lives in its own worker process; unloading ends that process and frees the memory completely.",
+"模型状态":"Model status","主模型":"Main model","权重":"Weights","校验和":"Checksum",
+"加载到 CPU":"Load to CPU","加载到 GPU":"Load to GPU","卸载":"Unload",
+"加载耗时 72 秒（首次校验权重 31 秒）":"Loading takes 72 s (the first run also verifies the weights, 31 s)",
+"GPU 不可用：":"GPU unavailable: ",
+"空闲显存需 ≥5 GiB，本机 8 GB 装完权重就贴满，自回归阶段必然显存溢出；FP8 需算力 ≥8.9（本机 8.6）。 自动降级到 CPU 是常态，不是故障。":"It needs 5 GiB of free VRAM; on this 8 GB card the weights alone fill it, so the autoregressive stage always runs out of memory. FP8 needs compute capability 8.9+ (this card is 8.6). Falling back to CPU is normal, not a fault.",
+"环境自检":"Environment check","命令":"Command","· 依赖就绪":"· dependencies ready",
+"未验证组合":"untested combination","符合版本锁定":"matches the pin",
+"显卡":"GPU","RTX 3060 Ti · 8GB · 算力 8.6":"RTX 3060 Ti · 8 GB · compute 8.6","BF16 可用":"BF16 available","FP8 不可用":"FP8 unavailable",
+"磁盘剩余":"Free disk","待检测":"not checked","后端":"Backend","可用":"Available","仅支持 Linux）":"Linux only)",
+"本机能力开关":"Capabilities on this machine","开":"On","FP8 量化":"FP8 quantization","硬件不支持":"hardware unsupported",
+"高速推理后端":"Fast inference backend","仅 Linux":"Linux only","并发大于 1":"Concurrency above 1",
+"官方禁止共享实例":"the official README forbids shared instances","任务取消":"Task cancellation","阶段边界生效":"takes effect at stage boundaries",
+"存储":"Storage","3 个任务":"3 tasks","回收站 0 项":"trash: 0 items",
+"任务状态以磁盘上的结果文件与失败文件为准，重启自动恢复；元数据文件只存界面字段，可随时重建。":"Task state comes from the result and failure files on disk and is recovered on restart; the metadata file only holds UI fields and can be rebuilt any time.",
+"界面语言只翻译操作文字；文件名、参数名、歌词与歌名属于数据，不翻译。正式实现会补齐焦点陷阱、进度无障碍播报与动效降级（演示已内置）。":"The UI language only translates interface text; filenames, parameter names, lyrics and song titles are data and keep their wording. The real build adds focus trapping, announced progress and reduced motion (already in this demo).",
+/* --- JS 动态文案 --- */
+"模型加载中（约 72 秒）…":"Loading the model (about 72 s)…","模型已加载 · CPU · 72 秒":"Model loaded · CPU · 72 s",
+"加载中…":"Loading…","加载中":"Loading","卸载模型":"Unload model","加载模型":"Load model",
+"已加载 · CPU":"Loaded · CPU","未加载":"Not loaded","已加载到 CPU":"Loaded on CPU",
+"模型已卸载，工作进程已退出，内存已释放":"Model unloaded: the worker process exited and memory was released",
+"模型已加载到 CPU · 可以开始生成":"Model loaded on CPU · ready to generate",
+"本机 8GB：加载到显卡会在自回归阶段显存溢出，按实测已降级到 CPU":"This machine has 8 GB: loading onto the GPU runs out of memory in the autoregressive stage, so it falls back to CPU as measured",
+"风格描述为空 —— 至少要写语言或流派":"Style description is empty — give at least a language or a genre",
+"歌词为空":"Lyrics are empty","歌词结构有告警，已阻止提交（可点「+ 段落」补结构）":"The lyric structure has warnings, so submit is blocked (use + section to fix it)",
+"新歌":"New song","候选 2（随机种子）":"Candidate 2 (random seed)",
+"已排队 {0} 个任务{1}":"Queued {0} task(s){1}"," · 生成前会先加载模型（约 72 秒）":" · the model loads first before generating (about 72 s)",
+"已切到 {0} 模式":"Switched to {0} mode","不规划模式：不产出可编辑乐谱，无法改谱重渲":"No-planning mode produces no editable score, so there is nothing to re-render from",
+"（未完成）":"(incomplete)","候选数量 = 排队 {0} 个不同种子的独立任务，可并排对比":"Candidates = {0} independent tasks with different seeds, queued and compared side by side",
+"已复位到官方默认":"Reset to the official defaults","已自定义采样":"Sampling customised",
+"每行音节数 {0}":"Syllables per line: {0}","长度失衡，易唱飘":"Unbalanced lengths — easy to sing off",
+"已经是第一段了":"This is already the first section","至少保留一个段落":"Keep at least one section","段落已删除":"Section deleted",
+"结构检查通过：段落标记完整":"Structure check passed: every section is marked","结构有告警，见歌词下方":"Structure has warnings — see below the lyrics",
+" 分阶段驻留：当前阶段留在设备，另一阶段暂存内存":" Staged residency: the current stage stays on device, the other waits in RAM",
+" 两阶段同时驻留，显存需求更高":" Both stages stay resident at once, which needs more VRAM",
+" torch-eager：关闭 CUDA 计算图，兼容性兜底、略慢":" torch-eager: CUDA graphs off, the compatible fallback, slightly slower",
+" 开启 CUDA 计算图（官方后端默认）":" CUDA graphs on (the official backend default)",
+" 仅使用本地已下载的模型":" Only uses models already downloaded locally"," 允许联网拉取模型":" Allows downloading models over the network",
+"规划乐谱":"Score planning","语义生成":"Semantic generation","非自回归合成":"Non-autoregressive synthesis","解码导出":"Decode and export",
+"已用":"Elapsed","预计还需":"Still ahead","速率":"Speed","词元":"Tokens","{0} 词元/秒":"{0} tokens/s",
+"生成中":"Generating","排队中":"Queued","取消":"Cancel","乐谱":"Score","试听":"Preview","复制参数":"Copy parameters",
+"改参数重试":"Tweak and retry","删除":"Delete","删除任务":"Delete task",
+"排队第 1 位 · 前面还有 1 个任务（约 7 分钟）":"1st in queue · 1 task ahead (about 7 min)",
+"时长":"Length","耗时":"Time","{0} 运行 · {1} 排队":"{0} running · {1} queued",
+"已载入该任务的乐谱（score.abc）":"This task's score has been loaded (score.abc)",
+"参数已回填到创作表单，随机种子保持不变":"Parameters copied into the create form; the seed stayed the same",
+"已移入回收站（保留 30 天）":"Moved to trash (kept 30 days)",
+"取消请求已发出 · 非自回归与解码阶段没有取消点，将在当前阶段结束后停止":"Cancellation requested · the synthesis and decode stages have no cancel point, so it stops when the current stage ends",
+"已取消":"Cancelled","用户取消（语义阶段结束时生效）":"Cancelled by the user (took effect at the end of the semantic stage)",
+"中间产物已保留，可从乐谱阶段续跑":"Intermediates were kept, so you can resume from the score stage",
+"改用 CPU，或下调显存配额":"Switch to CPU, or lower the VRAM quota",
+"把歌词精简到 2 段以内":"Shorten the lyrics to at most 2 sections",
+"保留失败记录便于比对":"Keep the failure record so the two runs can be compared",
+"或直接改参数重新排队":"Or change the parameters and queue again","任务已取消，产物目录保留":"Task cancelled; its output folder is kept",
+"已重载原始乐谱，本地改动已丢弃":"Original score reloaded; local edits discarded",
+"仅出谱：预计约 53 秒，产物 score.abc + plan.json":"Score only: about 53 s, outputs score.abc + plan.json",
+"改谱重渲染":"Re-render from edited score","重渲染已排队，乐谱谱系已挂到原始任务":"Re-render queued and hung on the original task in the lineage",
+"去和弦：已去掉 12 个和弦标记，人声与伴奏两个声部都保留 → 请改用「仅旋律」渲染":"Chords stripped: 12 chord markers removed, both vocal and accompaniment kept → render it as melody only",
+"器乐化：112 个人声音符已移入伴奏声部（音高、起奏、时值不变），3 处重叠已记录":"Instrumentalised: 112 vocal notes moved into the accompaniment (pitch, onset and duration kept); 3 overlaps recorded",
+"查看失败记录":"View failure.json","查看产物":"View outputs",
+"6 个任务已入队 · 预计 51 分钟（本机后端并发恒为 1）":"6 tasks queued · about 51 min (this backend runs one job at a time)",
+"续跑校验 5/6 通过 · b05 身份哈希不匹配，将重新生成":"Resume check passed 5/6 · b05 identity hash mismatched, so it regenerates",
+"支持拖入 songs.jsonl，或直接粘贴行文本（编号必须唯一）":"Drop a songs.jsonl here, or paste the lines directly (ids must be unique)",
+"A/B 盲听对比：并排卡片 + 统一时间轴，各自的请求参数与乐谱都保留":"A/B blind test: side-by-side cards on one timeline, each keeping its own request and score",
+"回收站当前 0 项，30 天后自动清除":"Trash holds 0 items now; they are cleared after 30 days",
+"已载入官方示例风格的中文范例":"Loaded the Chinese example from the official prompt style",
+"播放":"Play","暂停":"Pause","City Lights（英文流行）":"City Lights (English pop)",
+"晚风穿过城市（完整规划）":"Evening Wind Over the City (fully planned)",
+"已切到候选 {0} · 对比模式下曲目与时间轴各自独立":"Switched to candidate {0} · in comparison mode the track and the timeline stay separate",
+"生成完成 · truncated=false，歌曲完整":"Finished · truncated=false, the song is complete"
+};
+const FRAG={
+"@lint_empty":{zh:"<b>有段落是空的，或缺段落标记。</b>补齐每一段再生成——空段落会让模型提前收尾（truncated）。",
+  en:"<b>A section is empty, or has no section marker.</b> Fill every section before generating — an empty one makes the model stop early (truncated)."},
+"@lint_chorus":{zh:"<b>没有 [Chorus] 段落。</b>官方管线靠副歌标记规划重复句式；只写 [Verse] 也能跑，但结构更容易散。",
+  en:"<b>No [Chorus] section.</b> The official pipeline uses the chorus marker to plan repeated hooks; [Verse]-only still runs, but the structure drifts more."}
+};
+let lang="zh";
+try{lang=localStorage.getItem("yue2.lang")==="en"?"en":"zh"}catch(e){}
+function T(zh){
+  if(FRAG[zh])return FRAG[zh][lang];
+  let out=lang==="en"&&Object.prototype.hasOwnProperty.call(EN,zh)?EN[zh]:zh;
+  for(let i=1;i<arguments.length;i++)out=out.split("{"+(i-1)+"}").join(String(arguments[i]));
+  return out;
+}
+function setTheme(t){
+  document.documentElement.dataset.theme=t;
+  try{localStorage.setItem("yue2.theme",t)}catch(e){}
+  const b=document.getElementById("btnTheme");
+  if(b)b.setAttribute("aria-pressed",t==="light"?"true":"false");
+}
+function toggleTheme(){setTheme(document.documentElement.dataset.theme==="light"?"dark":"light")}
+const SRC=new WeakMap(),ASRC=new WeakMap(),ATR=["placeholder","aria-label","title","alt"];
+const norm=s=>s.replace(/\s+/g," ").trim();
+function trDom(root){
+  const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+  let n;
+  while((n=w.nextNode())){
+    if(SRC.has(n))n.nodeValue=SRC.get(n);
+    const host=n.parentNode;
+    if(!host||host.nodeType!==1||/^(SCRIPT|STYLE|TITLE)$/.test(host.tagName)||
+       (host.closest&&host.closest("[data-notr]"))||lang==="zh")continue;
+    const raw=n.nodeValue,key=norm(raw);
+    if(!key||!Object.prototype.hasOwnProperty.call(EN,key))continue;
+    SRC.set(n,raw);
+    n.nodeValue=/^\s*/.exec(raw)[0]+EN[key]+/\s*$/.exec(raw)[0];
+  }
+  root.querySelectorAll("[placeholder],[aria-label],[title],[alt]").forEach(el=>{
+    if(el.parentElement&&el.parentElement.closest("[data-notr]"))return;   /* data-notr 只保护自己的内容，不保护自己的标签 */
+    let store=ASRC.get(el);
+    if(!store){store={};ASRC.set(el,store)}
+    ATR.forEach(a=>{
+      if(!el.hasAttribute(a))return;
+      if(!(a in store))store[a]=el.getAttribute(a);
+      const key=norm(store[a]);
+      el.setAttribute(a,lang==="en"&&Object.prototype.hasOwnProperty.call(EN,key)?EN[key]:store[a]);
+    });
+  });
+}
+let wired=false;
+function applyLang(next){
+  if(next)lang=next==="en"?"en":"zh";
+  try{localStorage.setItem("yue2.lang",lang)}catch(e){}
+  document.documentElement.lang=lang==="en"?"en":"zh-CN";
+  document.title=T("YuE2 音乐工作台 · 界面演示");
+  if(!wired&&document.body){wired=true;
+    document.querySelectorAll(".langseg button").forEach(b=>b.onclick=()=>applyLang(b.dataset.lang));
+    const bt=document.getElementById("btnTheme");
+    if(bt)bt.onclick=toggleTheme;
+  }
+  document.querySelectorAll(".langseg button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.lang===lang)));
+  if(!document.body)return;
+  trDom(document.body);
+  if(window.rerender)window.rerender();
+}
+function toggleLang(){applyLang(lang==="zh"?"en":"zh")}
+window.T=T;window.EN=EN;window.getLang=()=>lang;window.applyLang=applyLang;
+window.toggleLang=toggleLang;window.setTheme=setTheme;window.toggleTheme=toggleTheme;
+</script>
+<style>
+/* ============ 字体（方案 §6.5 · 定案 C）============
+   Inter + JetBrains Mono 随包（SIL OFL 1.1，许可证原文在 fonts/OFL-*.txt）；
+   中文用本机思源黑三档真字重，缺字体时自动退回雅黑，界面不破。 */
+@font-face{font-family:"Inter";font-weight:100 900;font-style:normal;font-display:swap;
+  src:url("fonts/inter-var-latin.woff2") format("woff2")}
+@font-face{font-family:"JetMono";font-weight:100 800;font-style:normal;font-display:swap;
+  src:url("fonts/jetbrains-mono-var-latin.woff2") format("woff2")}
+@font-face{font-family:"CJK";font-weight:400;font-display:swap;
+  src:local("Noto Sans SC"),local("Microsoft YaHei")}
+@font-face{font-family:"CJK";font-weight:500;font-display:swap;
+  src:local("Noto Sans SC Medium"),local("Noto Sans SC"),local("Microsoft YaHei")}
+@font-face{font-family:"CJK";font-weight:700;font-display:swap;
+  src:local("Noto Sans SC Bold"),local("Noto Sans SC"),local("Microsoft YaHei Bold"),local("Microsoft YaHei")}
+
+/* ============ tokens（方案 §6.2 · 定案「砚·瓷·墨」）============ */
+:root{
+  color-scheme:dark;
+  /* 外壳：带极淡墨绿相的灰阶（彩度 2–5），不用蓝灰 */
+  --bg:#101211; --s1:#171A18; --s2:#1E221F; --s3:#262B28; --sunken:#0D0F0E;
+  --border:#313733; --border-strong:#4A514C; --hairline:#212622;
+  --text:#E8EAE6; --text2:#ADB4AC; --text3:#878E86; --on-accent:#0D1310;
+  /* 强调＝瓷玉：浅面压深墨字，不靠饱和度取胜 */
+  --accent:#93BCA6; --accent-h:#B4D8C2; --accent-txt:#A6D2BB;
+  --accent-soft:rgba(147,188,166,.13); --accent-bd:rgba(147,188,166,.42); --sel:rgba(147,188,166,.30);
+  --glow:rgba(147,188,166,.05); --scrim:rgba(6,9,8,.72);
+  /* 语义三档：完成=玉 / 需注意=琥珀 / 失败=胭脂；绿黄红只允许出现在电平表 */
+  --ready:#6FB894; --warn:#E4B23C; --danger:#DE6A58;
+  --txt-ok:#B9E6CB; --txt-warn:#F0C574; --txt-err:#EFA99C;
+  --bg-ok:#16241D; --bg-warn:#2A2114; --bg-err:#2C1B18; --bg-err-hover:#3A221E;
+  --bd-ok:rgba(111,184,148,.42); --bd-err:rgba(222,106,88,.42); --bd-warn:rgba(228,178,60,.42);
+  /* 材质＝只做表面台阶 + 发丝线：不加顶高光、不加渐变、不加内凹 */
+  --panel:#171A18; --panel-2:#1E221F; --btn:#1E221F;
+  --porcelain:#93BCA6; --porcelain-h:#A6CDB8; --porcelain-p:#7FA994;
+  --meter-lo:#5FAE84; --meter-mid:#E4B23C; --meter-hi:#DE6A58;
+  --paper:#F7F4EC; --ink:#1B1A17; --paper-bd:#DDD5C4; --paper-line:#C9C0AE; --paper-accent:#8A5A16;
+  --font-ui:"Inter","CJK","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+  --font-mono:"JetMono","CJK",ui-monospace,Consolas,"Courier New",monospace;
+  --r1:4px; --r2:8px; --r3:14px; --r4:20px;
+  --e2:0 2px 10px -4px rgba(5,8,6,.55); --e3:0 18px 44px -16px rgba(4,7,5,.7);
+  --z-base:0; --z-sticky:10; --z-rail:20; --z-transport:40; --z-drawer:60; --z-modal:100; --z-toast:120;
+  --d1:140ms; --d2:220ms; --d3:320ms; --ease-out:cubic-bezier(.2,.7,.2,1); --ease-in:cubic-bezier(.4,0,.8,.4);
+  --sp1:4px; --sp2:8px; --sp3:12px; --sp4:16px; --sp5:24px; --sp6:32px; --sp7:48px;
+}
+html[data-theme=light]{
+  color-scheme:light;
+  /* 外壳：中性骨白（暖味只留给谱纸） */
+  --bg:#F2F3EF; --s1:#FFFFFF; --s2:#FAFBF8; --s3:#EDF0EA; --sunken:#F7F8F5;
+  --border:#D6DAD2; --border-strong:#A6ACA4; --hairline:#E7EAE3;
+  --text:#141715; --text2:#474E48; --text3:#656C65; --on-accent:#FFFFFF;
+  --accent:#2F6B54; --accent-h:#3C7C62; --accent-txt:#215943;
+  --accent-soft:rgba(47,107,84,.10); --accent-bd:rgba(47,107,84,.32); --sel:rgba(47,107,84,.20);
+  --glow:rgba(47,107,84,.045); --scrim:rgba(24,32,28,.32);
+  --ready:#1F7A57; --warn:#B8801C; --danger:#B8402F;
+  --txt-ok:#155E42; --txt-warn:#7A5310; --txt-err:#A8382A;
+  --bg-ok:#E6F2EB; --bg-warn:#FAF1DC; --bg-err:#FAE9E6; --bg-err-hover:#F4DAD5;
+  --bd-ok:rgba(31,122,87,.32); --bd-err:rgba(184,64,47,.32); --bd-warn:rgba(184,128,28,.36);
+  --panel:#FFFFFF; --panel-2:#FAFBF8; --btn:#FFFFFF;
+  --porcelain:#2F6B54; --porcelain-h:#38755C; --porcelain-p:#2A6249;
+  --meter-lo:#1F7A57; --meter-mid:#B8801C; --meter-hi:#B8402F;
+  --paper:#FBF8F0; --ink:#1B1A17; --paper-bd:#D6CCB4; --paper-line:#C9C0AE; --paper-accent:#8A5A16;
+  --e2:0 2px 10px -4px rgba(28,38,30,.12); --e3:0 18px 40px -14px rgba(28,38,30,.2);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--font-ui); font-size:16px;
+  line-height:1.6; -webkit-font-smoothing:antialiased; overflow:hidden;
+}
+button,input,select,textarea{font-family:inherit; font-size:inherit; color:inherit}
+button{background:none;border:none;cursor:pointer;touch-action:manipulation}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r1)}
+::selection{background:var(--sel)}
+html{scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border:3px solid transparent;background-clip:content-box;
+  border-radius:999px}
+::-webkit-scrollbar-thumb:hover{background:var(--border-strong);background-clip:content-box}
+::-webkit-scrollbar-corner{background:transparent}
+h1,h2,h3{line-height:1.25;font-weight:500}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ============ shell ============ */
+.shell{display:grid;grid-template-rows:56px 1fr 72px;grid-template-columns:248px 1fr;
+  grid-template-areas:"top top" "rail work" "trans trans";height:100dvh}
+.topbar{grid-area:top;display:flex;align-items:center;gap:var(--sp4);padding:0 var(--sp5);
+  background:var(--s1);border-bottom:1px solid var(--border);
+  z-index:var(--z-sticky)}
+.brand{display:flex;align-items:center;gap:var(--sp3);font-weight:700;letter-spacing:-.01em;font-size:18px}
+.brand svg{width:26px;height:26px;flex:none;color:var(--accent)}
+.brand .tag{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--accent-txt);
+  border:1px solid var(--accent-bd);background:var(--accent-soft);padding:var(--sp1) var(--sp2);border-radius:var(--r1)}
+.mstatus{display:flex;align-items:center;gap:var(--sp2);background:var(--sunken);border:1px solid var(--border);
+  border-radius:999px;padding:var(--sp1) var(--sp3);font-size:14px;color:var(--text2);
+}
+.mstatus .dot{width:9px;height:9px;border-radius:50%;background:var(--text3);flex:none}
+.mstatus.on .dot{background:var(--ready)}
+.mstatus.busy .dot{background:var(--warn);animation:pulse 1.2s var(--ease-out) infinite}
+@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+.spacer{flex:1}
+.devseg{display:flex;border:1px solid var(--border);border-radius:var(--r2);overflow:hidden;
+  background:var(--sunken);}
+.devseg button{padding:0 var(--sp4);font-size:14px;font-weight:500;color:var(--text3);min-height:40px;
+  transition:background var(--d1) var(--ease-out),color var(--d1) var(--ease-out)}
+.devseg button+button{border-left:1px solid var(--border)}
+.devseg button[aria-pressed=true]{background:var(--porcelain);color:var(--on-accent);
+}
+.devseg button:not([aria-pressed=true]):hover{color:var(--text)}
+.langseg{display:flex;border:1px solid var(--border);border-radius:var(--r2);overflow:hidden;
+  background:var(--sunken);flex:none}
+.langseg button{padding:0 var(--sp3);font-size:13px;font-weight:700;letter-spacing:.03em;color:var(--text3);min-height:40px;
+  transition:background var(--d1) var(--ease-out),color var(--d1) var(--ease-out)}
+.langseg button+button{border-left:1px solid var(--border)}
+.langseg button[aria-pressed=true]{background:var(--porcelain);color:var(--on-accent);
+}
+.langseg button:not([aria-pressed=true]):hover{color:var(--text)}
+.tbtn svg{width:16px;height:16px;stroke:currentColor;stroke-width:1.6;fill:none}
+#icoMoon{display:none}
+html[data-theme=light] #icoSun{display:none}
+html[data-theme=light] #icoMoon{display:block}
+.mode .cotv{margin-left:auto;font-family:var(--font-mono);font-size:12px;font-weight:500;color:var(--text3);
+  border:1px solid var(--border);background:var(--sunken);border-radius:var(--r1);padding:var(--sp1) var(--sp2);letter-spacing:.02em}
+.idn{font-family:var(--font-mono);font-size:.9em;font-style:normal;color:var(--text2);
+  background:var(--sunken);border:1px solid var(--hairline);border-radius:var(--r1);padding:var(--sp1) var(--sp2)}
+
+.rail{grid-area:rail;background:var(--s1);border-right:1px solid var(--border);
+  padding:var(--sp4) var(--sp3);display:flex;flex-direction:column;gap:var(--sp1);
+  z-index:var(--z-rail);overflow-y:auto}
+.rail .grp{font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--text3);
+  text-transform:uppercase;padding:var(--sp4) var(--sp3) var(--sp2)}
+.nav{display:flex;align-items:center;gap:var(--sp3);padding:var(--sp2) var(--sp3);border-radius:var(--r2);
+  border:1px solid transparent;color:var(--text2);font-size:14px;position:relative;min-height:48px;
+  transition:background var(--d1) var(--ease-out),color var(--d1) var(--ease-out),box-shadow var(--d1) var(--ease-out)}
+.nav svg{width:20px;height:20px;flex:none;stroke:currentColor;stroke-width:1.5;fill:none;opacity:.85}
+.nav:hover{background:var(--s2);color:var(--text)}
+.nav[aria-current=page]{background:var(--panel-2);color:var(--text);font-weight:500;
+  border:1px solid var(--border)}
+.nav[aria-current=page] svg{opacity:1;color:var(--accent)}
+.nav[aria-current=page]::before{content:"";position:absolute;left:-13px;top:var(--sp3);bottom:var(--sp3);width:3px;
+  border-radius:0 3px 3px 0;background:var(--accent)}
+.nav .count{margin-left:auto;font-size:12px;font-weight:700;color:var(--on-accent);
+  background:var(--porcelain);border-radius:999px;padding:var(--sp1) var(--sp2);font-variant-numeric:tabular-nums;
+}
+.nav .count.q{background:var(--s3);color:var(--text2);}
+.railfoot{margin-top:auto;padding:var(--sp3);border-top:1px solid var(--hairline);
+  font-size:13px;color:var(--text3);line-height:1.5}
+
+.work{grid-area:work;overflow-y:auto;overscroll-behavior:contain;background:
+  radial-gradient(1200px 420px at 78% -12%,var(--glow),transparent 70%),var(--bg)}
+.view{display:none;max-width:1360px;margin:0 auto;padding:var(--sp6) var(--sp5) var(--sp7)}
+.view.active{display:block;animation:rise var(--d3) var(--ease-out)}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.vhead{margin-bottom:var(--sp5)}
+.vhead h1{font-size:26px;letter-spacing:-.02em}
+.vhead p{color:var(--text2);font-size:16px;margin-top:var(--sp2);max-width:68ch;line-height:1.7}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:var(--sp5);align-items:start}
+
+/* ============ primitives ============ */
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r3);padding:var(--sp5);
+  }
+.card.raised{background:var(--panel-2);box-shadow:var(--e2)}
+.card h2{font-size:16px;font-weight:500;letter-spacing:.01em;display:flex;align-items:center;gap:var(--sp3)}
+.card h2 svg{width:18px;height:18px;stroke:var(--accent);stroke-width:1.5;fill:none;opacity:.9}
+.sub{color:var(--text2);font-size:14px}
+.divider{height:1px;background:var(--hairline);
+  margin:var(--sp5) 0}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--sp2);background:var(--btn);
+  border:1px solid var(--border);border-radius:var(--r2);padding:0 var(--sp4);min-height:40px;
+  font-size:14px;font-weight:500;color:var(--text);
+  transition:background var(--d1) var(--ease-out),border-color var(--d1) var(--ease-out),color var(--d1) var(--ease-out)}
+.btn svg{width:16px;height:16px;stroke:currentColor;stroke-width:1.5;fill:none}
+.btn:hover{border-color:var(--border-strong);color:var(--text);background:var(--s3)}
+.btn:active{background:var(--s2);border-color:var(--border-strong)}
+.btn.sm{min-height:32px;font-size:13px;padding:0 var(--sp3)}
+.btn.primary{background:var(--porcelain);border-color:var(--porcelain);color:var(--on-accent)}
+.btn.primary:hover{background:var(--porcelain-h);border-color:var(--porcelain-h)}
+.btn.primary:active{background:var(--porcelain-p);border-color:var(--porcelain-p)}
+.btn.ghost{background:none;border-color:transparent;color:var(--text2)}
+.btn.ghost:hover{color:var(--text);background:var(--s2);border-color:var(--border)}
+.btn.danger{background:var(--bg-err);border-color:var(--bd-err);color:var(--txt-err);}
+.btn.danger:hover{background:var(--bg-err-hover);border-color:var(--danger);color:var(--txt-err)}
+.btn[disabled],.btn.off{opacity:.42;cursor:not-allowed;box-shadow:none;transform:none}
+.btn.big{min-height:48px;font-size:16px;width:100%;letter-spacing:.02em}
+.chipset{display:flex;flex-wrap:wrap;gap:var(--sp2)}
+.chip{display:inline-flex;align-items:center;gap:var(--sp2);background:var(--sunken);border:1px solid var(--border);
+  border-radius:999px;padding:0 var(--sp3);font-size:14px;color:var(--text2);min-height:32px;
+  transition:background var(--d1) var(--ease-out),border-color var(--d1) var(--ease-out),color var(--d1) var(--ease-out)}
+.chip svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.7;fill:none;flex:none}
+.chip:hover{border-color:var(--border-strong);color:var(--text)}
+.chip[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent-bd);color:var(--accent-txt);
+}
+.badge{display:inline-flex;align-items:center;gap:var(--sp1);border-radius:999px;padding:var(--sp1) var(--sp2);
+  font-size:12px;font-weight:500;letter-spacing:.02em;border:1px solid var(--border);
+  background:var(--s2);color:var(--text2)}
+.badge svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none}
+.badge.run{color:var(--txt-warn);border-color:var(--bd-warn);background:var(--bg-warn)}
+.badge.done{color:var(--txt-ok);border-color:var(--bd-ok);background:var(--bg-ok)}
+.badge.fail{color:var(--txt-err);border-color:var(--bd-err);background:var(--bg-err)}
+.badge.queue{color:var(--text2)}
+.tk{color:var(--ready);font-weight:700}
+.tk.w{color:var(--warn)}
+.field{display:block;margin-bottom:var(--sp4)}
+.field>label,.lbl{display:block;font-size:13px;font-weight:500;color:var(--text);margin-bottom:var(--sp2);letter-spacing:.01em}
+.hint{font-size:13px;color:var(--text3);margin-top:var(--sp2);line-height:1.55}
+.inp,select.inp,textarea.inp{width:100%;background:var(--sunken);border:1px solid var(--border);
+  border-radius:var(--r2);padding:var(--sp2) var(--sp3);min-height:40px;font-size:16px;
+  transition:border-color var(--d1) var(--ease-out),box-shadow var(--d1) var(--ease-out)}
+textarea.inp{resize:vertical;line-height:1.7}
+.inp:focus{outline:none;border-color:var(--accent-bd);
+  box-shadow:0 0 0 2px var(--accent-soft)}
+.inp::placeholder{color:var(--text3)}
+select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--text2) 50%),
+  linear-gradient(135deg,var(--text2) 50%,transparent 50%);background-position:calc(100% - 18px) 20px,
+  calc(100% - 13px) 20px;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:36px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp4)}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp3)}
+.inline{display:flex;align-items:center;gap:var(--sp3);flex-wrap:wrap}
+.note{background:var(--bg-warn);border:1px solid var(--bd-warn);border-left-width:3px;
+  border-radius:var(--r2);padding:var(--sp3) var(--sp4);font-size:14px;color:var(--txt-warn);line-height:1.6}
+.note.bad{border-color:var(--bd-err);border-left-color:var(--danger);color:var(--txt-err);background:var(--bg-err)}
+.note.ok{border-color:var(--bd-ok);border-left-color:var(--ready);color:var(--txt-ok);background:var(--bg-ok)}
+kbd{font-family:var(--font-mono);font-size:12px;background:var(--s3);border:1px solid var(--border-strong);
+  border-bottom-width:2px;border-radius:var(--r1);padding:var(--sp1) var(--sp2);color:var(--text);
+  }
+
+/* mode cards */
+.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp3)}
+.mode{background:var(--panel);border:1px solid var(--border);border-radius:var(--r3);padding:var(--sp4);
+  text-align:left;position:relative;min-height:126px;
+  transition:border-color var(--d2) var(--ease-out),transform var(--d2) var(--ease-out),
+    box-shadow var(--d2) var(--ease-out),background var(--d2) var(--ease-out)}
+.mode:hover{border-color:var(--border-strong)}
+.mode[aria-pressed=true]{border-color:var(--accent-bd);background:var(--s2)}
+.mode .mt{display:flex;align-items:center;gap:var(--sp2);font-weight:700;font-size:16px;padding-right:26px;letter-spacing:.01em}
+.mode .mt svg{width:18px;height:18px;stroke:var(--accent);stroke-width:1.6;fill:none;flex:none}
+.mode .mt .mn{flex:1;min-width:0;white-space:nowrap}
+.mode .md{color:var(--text2);font-size:13px;margin-top:var(--sp2);line-height:1.55}
+.mode .mf{margin-top:var(--sp3);font-size:13px;display:flex;align-items:center;gap:var(--sp2)}
+.mode .mf.y{color:var(--ready)} .mode .mf.n{color:var(--text3)}
+.mode .pick{position:absolute;top:12px;right:12px;width:18px;height:18px;border-radius:50%;
+  border:1.5px solid var(--border-strong);transition:all var(--d1) var(--ease-out)}
+.mode[aria-pressed=true] .pick{border-color:var(--accent);background:var(--accent);
+  box-shadow:inset 0 0 0 3px var(--s2)}
+
+/* lyrics sections */
+.sec{background:var(--panel);border:1px solid var(--border);border-radius:var(--r2);margin-bottom:var(--sp3);
+  overflow:hidden;transition:border-color var(--d1) var(--ease-out),box-shadow var(--d1) var(--ease-out)}
+.sec:focus-within{border-color:var(--accent-bd)}
+.sechead{display:flex;align-items:center;gap:var(--sp2);padding:var(--sp2) var(--sp3);background:var(--sunken);
+  border-bottom:1px solid var(--hairline)}
+.sectag{font-family:var(--font-mono);font-size:12px;font-weight:700;letter-spacing:.02em;color:var(--accent-txt);
+  background:var(--accent-soft);border:1px solid var(--accent-bd);border-radius:var(--r1);padding:var(--sp1) var(--sp2)}
+.sechead .ln{font-size:12px;color:var(--text3);margin-left:auto;font-variant-numeric:tabular-nums}
+.iconbtn{width:32px;height:32px;border-radius:var(--r1);display:grid;place-items:center;color:var(--text3);
+  transition:all var(--d1) var(--ease-out)}
+.iconbtn svg{width:16px;height:16px;stroke:currentColor;stroke-width:1.6;fill:none}
+.iconbtn:hover{background:var(--s3);color:var(--text)}
+.sec textarea{width:100%;background:transparent;border:none;padding:var(--sp2) var(--sp3);min-height:86px;
+  font-size:16px;line-height:1.85;resize:vertical}
+.sec textarea:focus{outline:none}
+.syl{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:12px;
+  color:var(--text3);padding:0 var(--sp3) var(--sp2)}
+.syl .b{color:var(--warn)}
+
+/* sliders */
+.ctl{margin-bottom:var(--sp4)}
+.ctl .row{display:flex;align-items:baseline;gap:var(--sp2);margin-bottom:var(--sp2)}
+.ctl .name{font-size:14px;color:var(--text)}
+.ctl .val{margin-left:auto;font-family:var(--font-mono);font-size:13px;color:var(--accent-txt);
+  background:var(--sunken);border:1px solid var(--border);border-radius:var(--r1);padding:var(--sp1) var(--sp2);
+  font-variant-numeric:tabular-nums;}
+.ctl .dft{font-size:12px;color:var(--text3)}
+input[type=range]{-webkit-appearance:none;width:100%;height:22px;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;
+  background:linear-gradient(90deg,var(--accent) var(--p,50%),var(--s3) var(--p,50%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+  background:var(--porcelain);border:2px solid var(--s1);margin-top:-6px;
+  
+  transition:transform var(--d1) var(--ease-out)}
+input[type=range]:active::-webkit-slider-thumb{transform:scale(1.08)}
+input[type=range]:disabled::-webkit-slider-thumb{background:var(--text3)}
+.acc{border:1px solid var(--border);border-radius:var(--r2);background:var(--panel);margin-top:var(--sp4);
+  }
+.acc>.t{display:flex;align-items:center;gap:var(--sp3);padding:var(--sp3) var(--sp4);width:100%;text-align:left;
+  font-size:16px;font-weight:500;min-height:48px}
+.acc>.t .chev{margin-left:auto;transition:transform var(--d2) var(--ease-out)}
+.acc>.t .chev svg{width:16px;height:16px;stroke:currentColor;stroke-width:1.8;fill:none}
+.acc[open] >.t .chev,.acc.open>.t .chev{transform:rotate(180deg)}
+.acc .body{padding:0 var(--sp4) var(--sp4);border-top:1px solid var(--hairline);padding-top:var(--sp4)}
+.acc:not(.open) .body{display:none}
+.tabs{display:flex;gap:var(--sp1);border-bottom:1px solid var(--border);margin-bottom:var(--sp4)}
+.tabs button{padding:0 var(--sp4);font-size:14px;font-weight:500;color:var(--text3);min-height:40px;
+  border-bottom:2px solid transparent;margin-bottom:-1px;transition:color var(--d1) var(--ease-out),
+    border-color var(--d1) var(--ease-out)}
+.tabs button:hover{color:var(--text)}
+.tabs button[aria-selected=true]{color:var(--text);border-bottom-color:var(--accent)}
+
+/* cost strip */
+.cost{display:flex;align-items:center;gap:var(--sp3);background:var(--sunken);border:1px solid var(--border);
+  border-radius:var(--r2);padding:var(--sp3) var(--sp4);margin-top:var(--sp4);font-size:14px;color:var(--text2);
+}
+.cost b{color:var(--text);font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.cost .brk{margin-left:auto;color:var(--accent-txt);font-weight:500;cursor:pointer}
+.cost ul{display:none;list-style:none;width:100%;font-size:13px;color:var(--text3);
+  border-top:1px solid var(--hairline);padding-top:var(--sp3);margin-top:var(--sp1)}
+.cost.open ul{display:block}
+.cost li{display:flex;justify-content:space-between;padding:var(--sp1) 0}
+.cost li b{color:var(--text2)}
+
+/* job cards + stages */
+.jobc{background:var(--panel);border:1px solid var(--border);border-radius:var(--r3);padding:var(--sp4);
+  margin-bottom:var(--sp3);
+  transition:border-color var(--d2) var(--ease-out),box-shadow var(--d2) var(--ease-out)}
+.jobc.live{border-color:var(--accent-bd);background:var(--panel-2)}
+.jobc .jt{display:flex;align-items:center;gap:var(--sp3)}
+.jobc .jid{font-family:var(--font-mono);font-size:13px;color:var(--text3)}
+.jobc .jname{font-size:16px;font-weight:500;letter-spacing:.01em}
+.jobc .acts{margin-left:auto;display:flex;gap:var(--sp2);flex-wrap:wrap;justify-content:flex-end}
+.jstyle{color:var(--text2);font-size:14px;margin-top:var(--sp2);line-height:1.55;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.stages{margin-top:var(--sp4)}
+.stagebar{display:flex;gap:var(--sp1);margin-bottom:var(--sp2)}
+.stagebar .sg{flex:1;height:6px;border-radius:3px;background:var(--s3);position:relative;overflow:hidden;
+}
+.stagebar .sg.done{background:var(--ready)}
+.stagebar .sg.act::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,var(--accent-h),transparent);
+  transform:translateX(-100%);animation:sweep 1.5s linear infinite}
+.stagebar .sg.act{background:var(--accent)}
+@keyframes sweep{to{transform:translateX(100%)}}
+.slabels{display:flex;gap:var(--sp3);font-size:12px;color:var(--text3);flex-wrap:wrap}
+.slabels i{font-style:normal}
+.slabels .done{color:var(--ready)} .slabels .act{color:var(--accent-txt);font-weight:500}
+.metrics{display:flex;gap:var(--sp5);margin-top:var(--sp3);font-size:13px;color:var(--text2);flex-wrap:wrap}
+.metrics b{font-family:var(--font-mono);color:var(--text);font-variant-numeric:tabular-nums;font-weight:500}
+.logt{margin-top:var(--sp3);background:var(--sunken);border:1px solid var(--hairline);border-radius:var(--r1);
+  padding:var(--sp2) var(--sp3);font-family:var(--font-mono);font-size:12px;color:var(--text2);max-height:74px;overflow:auto;
+  line-height:1.7}
+.art{display:flex;gap:var(--sp2);flex-wrap:wrap;margin-top:var(--sp3)}
+.art a{font-family:var(--font-mono);font-size:12px;color:var(--text2);border:1px solid var(--border);
+  background:var(--sunken);border-radius:var(--r1);padding:var(--sp1) var(--sp2);text-decoration:none;
+  transition:border-color var(--d1) var(--ease-out),color var(--d1) var(--ease-out)}
+.art a:hover{color:var(--accent-txt);border-color:var(--accent-bd)}
+.wave{display:flex;align-items:flex-end;gap:2px;height:40px;width:100%}
+.wave i{width:3px;border-radius:1px;background:var(--s3)}
+.wave i.f{background:var(--meter-lo)}
+.wave i.f.m{background:var(--meter-mid)}
+.wave i.f.h{background:var(--meter-hi)}
+
+/* transport */
+.trans{grid-area:trans;display:flex;align-items:center;gap:var(--sp4);padding:0 var(--sp5);
+  background:var(--s1);border-top:1px solid var(--border);
+  border-top:1px solid var(--border);z-index:var(--z-transport)}
+.pp{width:44px;height:44px;border-radius:50%;background:var(--porcelain);color:var(--on-accent);
+  display:grid;place-items:center;flex:none;transition:background var(--d1) var(--ease-out)}
+.pp:hover{background:var(--porcelain-h)}
+.pp svg{width:18px;height:18px;fill:currentColor}
+.tmeta{width:210px;flex:none}
+.tmeta .tn{font-size:16px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tmeta .ts{font-size:12px;color:var(--text3)}
+.tprog{flex:1;display:flex;align-items:center;gap:var(--sp3);min-width:0}
+.tprog .tm{font-family:var(--font-mono);font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums;flex:none}
+.track{flex:1;height:40px;display:flex;align-items:center}
+.ab{display:flex;border:1px solid var(--border);border-radius:var(--r2);overflow:hidden;flex:none;
+  background:var(--sunken);}
+.ab button{padding:0 var(--sp3);min-height:32px;font-size:13px;font-weight:700;color:var(--text3);
+  transition:background var(--d1) var(--ease-out),color var(--d1) var(--ease-out)}
+.ab button+button{border-left:1px solid var(--border)}
+.ab button.on{background:var(--s3);color:var(--accent-txt)}
+.vol{display:flex;align-items:center;gap:var(--sp2);flex:none;width:120px}
+.vol svg{width:16px;height:16px;stroke:var(--text3);stroke-width:1.6;fill:none}
+
+/* score / paper（方案 §6.1 记忆点1：全站唯一的暖面） */
+.paper{background:var(--paper);color:var(--ink);border-radius:var(--r3);border:1px solid var(--paper-bd);
+  box-shadow:var(--e3);overflow:hidden}
+.paper .ph{display:flex;align-items:center;gap:var(--sp3);padding:var(--sp3) var(--sp4);
+  border-bottom:1px solid var(--paper-line);background:rgba(0,0,0,.035);font-size:13px;color:#5A5346;
+  letter-spacing:.01em}
+.paper .ph .pd{width:7px;height:7px;border-radius:50%;background:#3F7F55}
+.edwrap{position:relative;height:420px;background:var(--paper)}
+.edwrap pre,.edwrap textarea{position:absolute;inset:0;margin:0;padding:var(--sp5) var(--sp5) var(--sp5) 56px;
+  font-family:var(--font-mono);font-size:14px;line-height:22px;white-space:pre;overflow:auto;
+  border:none;letter-spacing:0;tab-size:4}
+.edwrap pre{pointer-events:none;background:transparent;color:var(--ink);overflow:hidden}
+.edwrap textarea{background:transparent;color:transparent;caret-color:var(--paper-accent);resize:none}
+.edwrap textarea:focus{outline:none}
+.edwrap .gutter{position:absolute;left:0;top:var(--sp5);width:48px;pointer-events:none;z-index:2;
+  will-change:transform}
+.edwrap .gutter div{height:22px;line-height:22px;text-align:right;padding-right:var(--sp2);
+  font-family:var(--font-mono);font-size:12px;color:#736B5B}
+.hl-hd{color:#8A5A16;font-weight:700}
+.hl-vc{color:#1C6E6B;font-weight:700}
+.hl-cm{color:#736B59;font-style:italic}
+.hl-ck{color:#6B4A8E;font-weight:700}
+.nt{color:#1B1A17}
+.rd{color:#B0413E}
+.bar{color:#6E6656}
+.kw{color:#2F6FA8;font-weight:700}
+.insp{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:var(--sp3)}
+.kv{background:var(--sunken);border:1px solid var(--border);border-radius:var(--r2);padding:var(--sp3);
+}
+.kv .k{font-size:12px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase}
+.kv .v{font-size:18px;font-weight:500;font-family:var(--font-mono);margin-top:var(--sp1);font-variant-numeric:tabular-nums}
+.diff{font-family:var(--font-mono);font-size:13px;border:1px solid var(--border);border-radius:var(--r2);overflow:hidden}
+.diff div{padding:var(--sp2) var(--sp3);border-bottom:1px solid var(--hairline);display:flex;gap:var(--sp3)}
+.diff div:last-child{border:none}
+.diff .minus{background:var(--bg-err);color:var(--txt-err)}
+.diff .plus{background:var(--bg-ok);color:var(--txt-ok)}
+.diff .same{color:var(--text3)}
+.lineage{display:flex;align-items:center;gap:var(--sp2);font-size:13px;color:var(--text2);flex-wrap:wrap}
+.lineage .node{border:1px solid var(--border);background:var(--s2);border-radius:999px;padding:var(--sp1) var(--sp3);
+  display:flex;align-items:center;gap:var(--sp2)}
+.lineage .node.cur{border-color:var(--accent);color:var(--accent-txt);background:var(--accent-soft)}
+.lineage .ar{color:var(--text3)}
+.lineage svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.6;fill:none}
+
+/* tables */
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th{text-align:left;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);
+  padding:0 var(--sp3) var(--sp3);font-weight:700;border-bottom:1px solid var(--border)}
+.tbl td{padding:var(--sp3);border-bottom:1px solid var(--hairline);vertical-align:middle}
+.tbl tr:hover td{background:var(--s2)}
+.tbl td .nm{font-weight:500}
+.state{display:inline-flex;align-items:center;gap:var(--sp2);font-size:13px;font-weight:500}
+.state svg{width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none}
+.state.run{color:var(--txt-warn)} .state.done{color:var(--ready)}
+.state.fail{color:var(--danger)} .state.queue{color:var(--text3)}
+
+/* library grid */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:var(--sp4)}
+.tcard{background:var(--panel);border:1px solid var(--border);border-radius:var(--r3);padding:var(--sp4);
+  position:relative;text-align:left;
+  transition:border-color var(--d2) var(--ease-out),background var(--d2) var(--ease-out)}
+.tcard:hover{border-color:var(--border-strong)}
+.tcard.sel{border-color:var(--accent-bd);background:var(--panel-2)}
+.tcard .cov{height:76px;border-radius:var(--r2);background:var(--sunken);border:1px solid var(--hairline);
+  display:flex;align-items:flex-end;gap:2px;padding:var(--sp2);margin-bottom:var(--sp3);overflow:hidden}
+.tcard .cov i{flex:1;border-radius:1px;background:var(--border-strong)}
+.tcard .cov i.lo{background:var(--meter-lo)}
+.tcard .cov i.mid{background:var(--meter-mid)}
+.tcard .cov i.hi{background:var(--meter-hi)}
+.tcard .tn2{font-size:16px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tcard .tm2{font-size:13px;color:var(--text3);margin-top:var(--sp1);font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.tcard .rowb{display:flex;align-items:center;gap:var(--sp2);margin-top:var(--sp3);flex-wrap:wrap}
+.star{position:absolute;top:12px;right:12px;color:var(--text3)}
+.star svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.6;fill:none}
+.star.on{color:var(--accent)} .star.on svg{fill:var(--accent)}
+
+/* overlays */
+.scrim{position:fixed;inset:0;background:var(--scrim);opacity:0;pointer-events:none;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  transition:opacity var(--d2) var(--ease-out);z-index:var(--z-modal)}
+.scrim.open{opacity:1;pointer-events:auto}
+.modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) translateY(6px);width:min(560px,92vw);
+  max-height:84vh;overflow:auto;background:var(--panel-2);border:1px solid var(--border-strong);
+  border-radius:var(--r4);box-shadow:var(--e3);opacity:0;pointer-events:none;
+  transition:opacity var(--d2) var(--ease-out),transform var(--d2) var(--ease-out);z-index:calc(var(--z-modal)+1)}
+.modal.open{opacity:1;pointer-events:auto;transform:translate(-50%,-50%)}
+.modal .mh{display:flex;align-items:center;gap:var(--sp3);padding:var(--sp4) var(--sp5);
+  border-bottom:1px solid var(--border)}
+.modal .mh h3{font-size:18px;letter-spacing:.01em} .modal .mb{padding:var(--sp5)}
+.modal .mfb{padding:var(--sp4) var(--sp5);border-top:1px solid var(--border);display:flex;gap:var(--sp3);justify-content:flex-end}
+.toasts{position:fixed;right:var(--sp5);bottom:88px;display:flex;flex-direction:column;gap:var(--sp2);
+  z-index:var(--z-toast);pointer-events:none}
+.toast{display:flex;align-items:center;gap:var(--sp3);background:var(--panel-2);border:1px solid var(--border-strong);
+  border-radius:var(--r2);padding:var(--sp3) var(--sp4);font-size:14px;
+  box-shadow:var(--e3);
+  transform:translateY(10px);opacity:0;transition:all var(--d2) var(--ease-out);pointer-events:auto;max-width:380px}
+.toast.in{transform:none;opacity:1}
+.toast svg{width:16px;height:16px;stroke:currentColor;stroke-width:1.8;fill:none;flex:none}
+.toast.ok{border-color:var(--bd-ok)} .toast.ok svg{stroke:var(--ready)}
+.toast.warn svg{stroke:var(--warn)} .toast.bad{border-color:var(--bd-err)} .toast.bad svg{stroke:var(--danger)}
+.demo-flag{position:fixed;left:50%;bottom:82px;transform:translateX(-50%);z-index:var(--z-toast);
+  background:var(--s3);border:1px solid var(--border-strong);color:var(--text2);font-size:12px;
+  letter-spacing:.02em;padding:var(--sp1) var(--sp3);border-radius:999px;pointer-events:none;opacity:.9;
+  }
+
+/* responsive */
+@media (max-width:1180px){
+  .shell{grid-template-columns:68px 1fr}
+  .nav{justify-content:center;padding:var(--sp2) 0} .nav .lb,.nav .count{display:none}
+  .rail .grp,.railfoot{display:none} .brand .tag{display:none}
+  .cols{grid-template-columns:1fr}
+}
+@media (max-width:820px){
+  .shell{grid-template-rows:56px 1fr 72px;grid-template-columns:1fr;
+    grid-template-areas:"top" "work" "railb"}
+  .rail{grid-area:railb;flex-direction:row;border-right:none;border-top:1px solid var(--border);
+    padding:var(--sp2);gap:var(--sp1);overflow:visible}
+  .nav{flex:1;flex-direction:column;gap:2px;padding:var(--sp2) var(--sp1);min-height:52px;font-size:12px}
+  .nav[aria-current=page]::before{left:50%;top:auto;bottom:-6px;right:auto;width:20px;height:3px;
+    transform:translateX(-50%);border-radius:3px 3px 0 0}
+  .trans{padding:0 var(--sp3);gap:var(--sp2)} .tmeta{width:auto;flex:1;min-width:0} .vol,.ab{display:none}
+  .view{padding:var(--sp4) var(--sp3) var(--sp6)}
+  .modes{grid-template-columns:1fr} .grid2,.grid3{grid-template-columns:1fr}
+  .vhead h1{font-size:20px} .mstatus{display:none}
+  .topbar{gap:var(--sp2);padding:0 var(--sp3)} .brand{font-size:14px;gap:var(--sp2)} .brand svg{width:22px;height:22px}
+  #btnLoad .lb{display:none} #btnLoad{padding:0 var(--sp3);min-width:44px} .langseg button{padding:0 var(--sp2)}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ============ TOP ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M2 12h2.4M7 6.5v11M11.5 3.5v17M16 8v8M20.5 10.5v3" stroke="currentColor" stroke-width="1.9"
+          stroke-linecap="round" fill="none"/>
+      </svg>
+      YuE2 <span class="tag">演示界面 · 假数据</span>
+    </div>
+    <div class="mstatus" id="mstat">
+      <span class="dot"></span><span id="mstatText">模型未加载 · 只能用 CPU（3060 Ti 8GB 显存不足）</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="devseg" role="group" aria-label="运行设备">
+      <button type="button" data-dev="cpu" aria-pressed="true">CPU</button>
+      <button type="button" data-dev="cuda" aria-pressed="false">GPU</button>
+    </div>
+    <div class="langseg" role="group" aria-label="界面语言">
+      <button type="button" data-lang="zh" aria-pressed="true">中</button>
+      <button type="button" data-lang="en" aria-pressed="false">EN</button>
+    </div>
+    <button class="iconbtn tbtn" id="btnTheme" type="button" aria-label="切换深浅色主题" title="切换深浅色主题（快捷键 T）">
+      <svg id="icoSun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M5 5l1.8 1.8M17.2 17.2 19 19M19 5l-1.8 1.8M6.8 17.2 5 19" stroke-linecap="round"/></svg>
+      <svg id="icoMoon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="btn ghost" id="btnLoad" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4L8 11M4 19h16" stroke-linecap="round"/></svg>
+      <span class="lb">加载模型</span>
+    </button>
+    <button class="iconbtn" id="btnKeys" type="button" aria-label="快捷键说明">
+      <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>
+    </button>
+  </header>
+
+  <!-- ============ RAIL ============ -->
+  <nav class="rail" aria-label="主导航">
+    <div class="grp">工作区</div>
+    <button class="nav" data-view="studio" aria-current="page" type="button">
+      <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <span class="lb">创作</span><span class="count" id="cStudio">1</span>
+    </button>
+    <button class="nav" data-view="score" type="button">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10M18 15l3 3-3 3" stroke-linecap="round"/></svg>
+      <span class="lb">乐谱工作台</span>
+    </button>
+    <button class="nav" data-view="batch" type="button">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 6.5h.01M7 17h.01"/></svg>
+      <span class="lb">批量</span><span class="count q" id="cBatch">6</span>
+    </button>
+    <button class="nav" data-view="library" type="button">
+      <svg viewBox="0 0 24 24"><path d="M4 4h4v16H4zM10 4h4v16h-4zM17 5l3 1-3.5 13-3-1z"/></svg>
+      <span class="lb">曲库</span>
+    </button>
+    <div class="grp">本机</div>
+    <button class="nav" data-view="system" type="button">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>
+      <span class="lb">系统</span>
+    </button>
+    <div class="railfoot">单任务队列<br>CPU 实测每首约 8 分 30 秒</div>
+  </nav>
+
+  <!-- ============ WORK ============ -->
+  <main class="work" id="work">
+
+    <!-- ---------- STUDIO ---------- -->
+    <section class="view active" id="v-studio" aria-labelledby="studio-h">
+      <div class="vhead">
+        <h1 id="studio-h">创作一首歌</h1>
+        <p>写风格与歌词 → 模型先出<b>可读可改的乐谱</b> → 渲染 48kHz 立体声完整歌曲。本机只能用 CPU，每首约 8 分 30 秒。</p>
+      </div>
+      <div class="cols">
+        <div>
+          <div class="card">
+            <h2><svg viewBox="0 0 24 24"><path d="M4 12h4l3-8 3 16 3-8h3"/></svg>规划模式</h2>
+            <div class="modes" role="group" aria-label="规划模式" style="margin-top:var(--sp4)">
+              <button class="mode" data-cot="full" aria-pressed="true" type="button">
+                <span class="pick"></span>
+                <span class="mt"><svg viewBox="0 0 24 24"><path d="M4 8h16M4 16h16M9 4v16M15 4v16"/></svg><span class="mn">旋律 + 和弦</span><span class="cotv">full</span></span>
+                <div class="md">规划旋律与和弦，再按谱渲染。新歌默认。</div>
+                <div class="mf y"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 13 4 4L19 7"/></svg>产出可编辑乐谱</div>
+              </button>
+              <button class="mode" data-cot="melody" aria-pressed="false" type="button">
+                <span class="pick"></span>
+                <span class="mt"><svg viewBox="0 0 24 24"><path d="M4 12c3-6 5 6 8 0s5 3 8-3"/></svg><span class="mn">仅旋律</span><span class="cotv">melody</span></span>
+                <div class="md">只规划旋律、不含和弦，伴奏跟着新风格走。翻唱用。</div>
+                <div class="mf y"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 13 4 4L19 7"/></svg>产出旋律谱</div>
+              </button>
+              <button class="mode" data-cot="off" aria-pressed="false" type="button">
+                <span class="pick"></span>
+                <span class="mt"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg><span class="mn">不规划</span><span class="cotv">off</span></span>
+                <div class="md">跳过符号规划直接生成，最快，但不能改谱。</div>
+                <div class="mf n"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>无乐谱</div>
+              </button>
+            </div>
+
+            <div class="divider"></div>
+            <div class="inline" style="justify-content:space-between;margin-bottom:var(--sp4)">
+              <h2><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h7"/></svg>风格描述</h2>
+              <div class="inline" style="gap:var(--sp2)">
+                <button class="btn sm" id="btnPreset" type="button">载入范例</button>
+                <button class="btn sm ghost" id="btnStyleSrc" aria-pressed="false" type="button">文本模式</button>
+              </div>
+            </div>
+            <div id="styleFields">
+              <div class="grid2">
+                <div class="field"><label for="fLang">语言</label>
+                  <select class="inp" id="fLang">
+                    <option value="Mandarin" selected>中文</option><option value="English">英文</option>
+                    <option value="Cantonese">粤语</option><option value="Japanese">日语</option>
+                  </select></div>
+                <div class="field"><label for="fBpm">速度 <span class="idn">BPM</span></label>
+                  <input class="inp" id="fBpm" type="number" value="92" min="40" max="220" inputmode="numeric"></div>
+              </div>
+              <div class="field"><label>流派</label><div class="chipset" data-dim="genre">
+                <button class="chip" data-token="city pop" title="city pop" aria-pressed="true" type="button">城市流行</button>
+                <button class="chip" data-token="acoustic pop" title="acoustic pop" aria-pressed="false" type="button">不插电流行</button>
+                <button class="chip" data-token="jazz-funk" title="jazz-funk" aria-pressed="false" type="button">爵士放克</button>
+                <button class="chip" data-token="folk ballad" title="folk ballad" aria-pressed="false" type="button">民谣叙事</button>
+                <button class="chip" data-token="synthwave" title="synthwave" aria-pressed="false" type="button">合成器浪潮</button>
+                <button class="chip" data-token="mandarin rock" title="mandarin rock" aria-pressed="false" type="button">华语摇滚</button>
+              </div></div>
+              <div class="field"><label>乐器</label><div class="chipset" data-dim="inst">
+                <button class="chip" data-token="electric piano" title="electric piano" aria-pressed="true" type="button">电钢琴</button>
+                <button class="chip" data-token="acoustic guitar" title="acoustic guitar" aria-pressed="true" type="button">木吉他</button>
+                <button class="chip" data-token="bass" title="bass" aria-pressed="false" type="button">贝斯</button>
+                <button class="chip" data-token="drums" title="drums" aria-pressed="false" type="button">架子鼓</button>
+                <button class="chip" data-token="strings" title="strings" aria-pressed="false" type="button">弦乐组</button>
+                <button class="chip" data-token="saxophone" title="saxophone" aria-pressed="false" type="button">萨克斯</button>
+              </div></div>
+              <div class="field"><label>人声</label><div class="chipset" data-dim="vocal">
+                <button class="chip" data-token="warm female vocal" title="warm female vocal" aria-pressed="true" type="button">温暖女声</button>
+                <button class="chip" data-token="breathy female vocal" title="breathy female vocal" aria-pressed="false" type="button">气声女声</button>
+                <button class="chip" data-token="warm male vocal" title="warm male vocal" aria-pressed="false" type="button">温暖男声</button>
+                <button class="chip" data-token="duet" title="duet" aria-pressed="false" type="button">男女对唱</button>
+              </div></div>
+            </div>
+            <div class="field" id="styleSrcBox" hidden>
+              <label for="fStyle">风格原文（直接下发给模型）</label>
+              <textarea class="inp mono" id="fStyle" rows="3" data-notr></textarea>
+              <div class="hint">字段模式与文本模式双向同步。切到文本模式可写任意描述，例如加入演奏提示、情绪、混音质感。</div>
+            </div>
+            <div class="hint">当前拼接结果：<span id="styleOut" class="mono" style="color:var(--text2)"></span></div>
+            <div class="hint">风格词固定以英文下发（官方提示词习惯），悬停标签可见原文；切换界面语言不影响它。</div>
+
+            <div class="divider"></div>
+            <div class="inline" style="justify-content:space-between;margin-bottom:var(--sp4)">
+              <h2><svg viewBox="0 0 24 24"><path d="M5 4h14M5 20h9M7 9h11M7 14h7"/></svg>歌词</h2>
+              <div class="inline" style="gap:var(--sp2)">
+                <button class="btn sm" id="btnAddSec" type="button">+ 段落</button>
+                <button class="btn sm ghost" id="btnLint" type="button">检查结构</button>
+              </div>
+            </div>
+            <div id="secs"></div>
+            <div class="note" id="lintNote" hidden></div>
+            <div class="hint">模型按<b>音节</b>排旋律：单行过长或段落失衡会唱飘。中文每行 7–13 字、副歌重复句式更稳。段落标记 <span class="idn">[Verse]</span> <span class="idn">[Chorus]</span> 是模型词表，不随界面语言翻译。</div>
+
+            <div class="divider"></div>
+            <div class="grid2">
+              <div class="field"><label for="fSeed">随机种子</label>
+                <div class="inline" style="gap:var(--sp2)">
+                  <input class="inp" id="fSeed" placeholder="留空 = 随机" inputmode="numeric" style="flex:1">
+                  <button class="btn" id="btnDice" type="button" aria-label="随机种子">
+                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 8h.01M16 16h.01M12 12h.01"/></svg>
+                  </button>
+                </div></div>
+              <div class="field"><label for="fVar">候选数量</label>
+                <select class="inp" id="fVar">
+                  <option value="1">1 个 · 约 8 分 30 秒</option>
+                  <option value="2">2 个 · 约 17 分钟</option>
+                  <option value="3">3 个 · 约 26 分钟</option>
+                  <option value="4">4 个 · 约 34 分钟</option>
+                </select></div>
+            </div>
+
+            <div class="acc" id="accAdv">
+              <button class="t" type="button" aria-expanded="false">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6h16M4 12h16M4 18h16M9 3v6M15 9v6M6 15v6"/></svg>
+                高级参数（采样 / 引导 / 解码器 / 运行环境）
+                <span class="chev"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+              </button>
+              <div class="body">
+                <div class="inline" style="justify-content:space-between;margin-bottom:var(--sp4)">
+                  <span class="badge" id="advBadge">官方默认</span>
+                  <button class="btn sm ghost" id="btnReset" type="button">全部复位</button>
+                </div>
+                <div class="field"><label>文本引导强度 <span class="idn">cfg_scale</span></label>
+                  <div class="ctl"><div class="row"><span class="dft">越大越贴合风格与歌词，官方按模式给默认值</span>
+                    <span class="val" id="vCfg">1.00</span></div>
+                    <input type="range" id="sCfg" min="0" max="3" step="0.01" value="1" aria-label="文本引导强度"></div></div>
+                <div class="tabs" role="tablist">
+                  <button role="tab" aria-selected="true" data-tab="abc" type="button">乐谱阶段</button>
+                  <button role="tab" aria-selected="false" data-tab="sem" type="button">语义阶段</button>
+                </div>
+                <div id="tab-abc" class="tabpanel">
+                  <div class="grid2"><div id="grpAbc"></div><div id="grpAbc2"></div></div>
+                </div>
+                <div id="tab-sem" class="tabpanel" hidden>
+                  <div class="grid2"><div id="grpSem"></div><div id="grpSem2"></div></div>
+                </div>
+                <div class="divider" style="margin:var(--sp4) 0"></div>
+                <div class="grid2">
+                  <div class="ctl"><div class="row"><span class="name">非自回归求解步数 <span class="dft"><span class="idn">ode_steps</span> · 越大越细越慢</span></span><span class="val" id="vOde">32</span></div>
+                    <input type="range" id="sOde" min="8" max="64" step="8" value="32" aria-label="非自回归求解步数"></div>
+                  <div class="field"><label for="fVae">解码器</label>
+                    <select class="inp" id="fVae"><option value="standard">YuE2-Vae（试听 · 默认）</option>
+                      <option value="legacy">YuE2-Vae-legacy（复现论文基准）</option></select>
+                    <div class="hint">同一份潜变量文件可分别解码对比，不必重新生成。</div></div>
+                </div>
+                <div class="note"><span class="idn">ode_method=midpoint</span>、<span class="idn">context=24576</span> 由官方代码硬校验，<b>只读</b>展示，改不了也不该改。</div>
+                <div class="divider" style="margin:var(--sp4) 0"></div>
+                <div class="grid2">
+                  <div class="field"><label for="fBudget">显存配额 <span class="idn">budget</span>（GiB）</label>
+                    <input class="inp" id="fBudget" type="number" value="8" min="2" max="24" inputmode="decimal">
+                    <div class="hint">≤12 自动切到 512 帧小规格解码器分块。</div></div>
+                  <div class="field"><label>权重精度 <span class="idn">quantization</span></label>
+                    <select class="inp" disabled title="FP8 需计算能力 ≥8.9（RTX 40 系及以后），本机 3060 Ti 为 8.6，不可用">
+                      <option>不量化（本机唯一可用）</option><option>FP8（本机不支持）</option></select>
+                    <div class="hint">官方明确不承诺量化后的质量与速度。</div></div>
+                </div>
+                <div class="inline" style="margin-top:var(--sp2)">
+                  <button class="chip" aria-pressed="true" id="cOff" type="button">分阶段驻留 <span class="idn">staged</span></button>
+                  <button class="chip" aria-pressed="true" id="cEager" type="button">关闭 CUDA 计算图</button>
+                  <button class="chip" aria-pressed="false" id="cOffline" type="button">仅用本地模型</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="cost" id="cost">
+              <span>预计耗时</span><b id="costT" class="mono">8:30</b>
+              <span style="color:var(--text3)">· 队列前 <b id="costQ" class="mono">0</b> 个任务</span>
+              <span class="brk" id="costBrk" role="button" tabindex="0">耗时构成 ▾</span>
+              <ul>
+                <li><span>规划乐谱（约 4096 词元）</span><b>约 53 秒</b></li>
+                <li><span>语义生成（最长 9000 词元，CPU 自回归）</span><b>约 5 分 10 秒</b></li>
+                <li><span>非自回归合成（流匹配 · 32 步）</span><b>约 1 分 40 秒</b></li>
+                <li><span>解码导出 FLAC（48kHz 立体声）</span><b>约 47 秒</b></li>
+                <li style="color:var(--text3)"><span>本机实测基准</span><b>42.3 秒音频 / 耗时 509 秒</b></li>
+              </ul>
+            </div>
+            <button class="btn primary big" id="btnGen" type="button" style="margin-top:var(--sp4)">
+              <svg viewBox="0 0 24 24"><path d="M4 12h4l3-8 3 16 3-8h3" stroke-linecap="round"/></svg>
+              生成歌曲 <kbd style="background:rgba(0,0,0,.18);border-color:rgba(0,0,0,.2);color:var(--on-accent)">Ctrl</kbd><kbd style="background:rgba(0,0,0,.18);border-color:rgba(0,0,0,.2);color:var(--on-accent)">↵</kbd>
+            </button>
+            <div class="hint" style="text-align:center;margin-top:var(--sp2)">生成期间可离开本页，任务在后台队列继续。</div>
+          </div>
+        </div>
+
+        <!-- 右：队列 + 当前任务 -->
+        <aside>
+          <div class="card raised" style="margin-bottom:var(--sp5)">
+            <div class="inline" style="justify-content:space-between">
+              <h2>队列</h2><span class="badge" id="qBadge">1 运行 · 1 排队</span>
+            </div>
+            <div id="queue" style="margin-top:var(--sp4)"></div>
+          </div>
+          <div class="card">
+            <h2><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>这个任务会给你什么</h2>
+            <ul style="list-style:none;margin-top:var(--sp4);font-size:14px;color:var(--text2)">
+              <li style="padding:var(--sp2) 0;border-bottom:1px solid var(--hairline)"><span class="tk">✓</span> <b>audio.flac</b> — 48kHz 立体声成品</li>
+              <li style="padding:var(--sp2) 0;border-bottom:1px solid var(--hairline)"><span class="tk">✓</span> <b>score.abc</b> — 可编辑乐谱（off 模式没有）</li>
+              <li style="padding:var(--sp2) 0;border-bottom:1px solid var(--hairline)"><span class="tk">✓</span> <b>plan.json / latent.npy</b> — 中间产物，可重解码不换曲子</li>
+              <li style="padding:var(--sp2) 0;border-bottom:1px solid var(--hairline)"><span class="tk">✓</span> <b>result.json</b> — 生效参数、耗时、权重 SHA256、truncated</li>
+              <li style="padding:var(--sp2) 0;color:var(--text3)"><span class="tk w">!</span> 整曲一次成型：改谱 = 重新渲染全曲，其余小节波形<b>不保留</b></li>
+            </ul>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ---------- SCORE ---------- -->
+    <section class="view" id="v-score" aria-labelledby="score-h">
+      <div class="vhead">
+        <div class="inline" style="justify-content:space-between;align-items:flex-start">
+          <div><h1 id="score-h">乐谱工作台</h1>
+            <p>白盒核心：读谱 → 改谱 → 逐音符校验 → 重新渲染。改错了 8 分多钟就白费，所以校验在生成<b>之前</b>。</p></div>
+          <div class="inline"><button class="btn" id="btnBackStudio" type="button">← 回创作</button></div>
+        </div>
+      </div>
+      <div class="card" style="padding:var(--sp4);margin-bottom:var(--sp5)">
+        <div class="lineage">
+          <span class="node"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/></svg><span class="mono">song_20261022_110759</span> 原始完整谱</span>
+          <span class="ar">→</span>
+          <span class="node"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>改和声 + 提速到 96</span>
+          <span class="ar">→</span>
+          <span class="node cur"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4L8 11"/></svg>渲染中 <span class="mono">song_20261022_133410</span></span>
+          <span class="ar">→</span>
+          <span style="color:var(--text3)">（改动未保存 · 1 处）</span>
+        </div>
+      </div>
+      <div class="cols" style="grid-template-columns:minmax(0,1fr) 380px">
+        <div class="paper">
+          <div class="ph">
+            <span class="pd"></span><span class="mono" data-notr>score.abc</span>
+            <span style="margin-left:auto">人声 + 伴奏双声部 · 原生 ABC 方言</span>
+            <button class="btn sm" id="btnAbcFmt" type="button" style="background:rgba(0,0,0,.05)">重载原始谱</button>
+          </div>
+          <div class="edwrap">
+            <div class="gutter" id="gut"></div>
+            <pre id="abcHl" aria-hidden="true" data-notr></pre>
+            <textarea id="abcEd" spellcheck="false" aria-label="ABC 乐谱源码编辑器" data-notr></textarea>
+          </div>
+        </div>
+        <aside>
+          <div class="card" style="margin-bottom:var(--sp4)">
+            <h2><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4.3-4.3"/></svg>结构校验</h2>
+            <div class="sub" style="margin:var(--sp2) 0 var(--sp4)">实时解析，复用官方 <span class="idn">abc_tools</span></div>
+            <div class="insp">
+              <div class="kv"><div class="k">拍号</div><div class="v">4/4</div></div>
+              <div class="kv"><div class="k">调号</div><div class="v">C 大调</div></div>
+              <div class="kv"><div class="k">速度</div><div class="v" id="iTempo">88</div></div>
+              <div class="kv"><div class="k">小节</div><div class="v" id="iBars">16</div></div>
+              <div class="kv"><div class="k">音符</div><div class="v" id="iNotes">112</div></div>
+              <div class="kv"><div class="k">和弦标记</div><div class="v" id="iChords">12</div></div>
+            </div>
+            <div class="divider"></div>
+            <div style="font-size:14px;font-weight:500;margin-bottom:var(--sp2)">段落</div>
+            <div class="inline" style="gap:var(--sp2)">
+              <span class="badge">主歌 ×4</span><span class="badge">副歌 ×4</span><span class="badge">无前奏 / 尾奏</span>
+            </div>
+            <div class="note ok" style="margin-top:var(--sp4)">语法与声部完整，可直接渲染。</div>
+          </div>
+          <div class="card" style="margin-bottom:var(--sp4)">
+            <h2><svg viewBox="0 0 24 24"><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>与原始谱对比</h2>
+            <div class="sub" style="margin:var(--sp2) 0 var(--sp4)">按音乐事件比，不是比字符串</div>
+            <div class="diff">
+              <div class="same">小节 1–4 · 人声旋律音高与时值一致</div>
+              <div class="minus">− 小节 5–8 和弦 <span data-notr>G → Dsus4</span></div>
+              <div class="plus">+ 小节 5–8 和弦 <span data-notr>Dsus4</span>（新增）</div>
+              <div class="same">小节 9–16 · 两个声部一致</div>
+              <div class="minus">− <span data-notr>Q:1/4=88</span></div>
+              <div class="plus">+ <span data-notr>Q:1/4=96</span></div>
+            </div>
+            <label class="inline" style="margin-top:var(--sp3);font-size:14px;cursor:pointer">
+              <input type="checkbox" id="ckTempo" style="width:16px;height:16px;accent-color:var(--accent)">
+              允许速度变化（<span class="idn">--allow-tempo-change</span>）
+            </label>
+          </div>
+          <div class="card">
+            <h2><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4L8 11M4 19h16"/></svg>下一步</h2>
+            <div style="display:grid;gap:var(--sp2);margin-top:var(--sp4)">
+              <button class="btn" id="actPlan" type="button">① 只出谱，不渲染 <span class="sub" style="margin-left:auto">约 53 秒</span></button>
+              <button class="btn primary" id="actRender" type="button">② 按这份谱重新渲染 <span class="sub" style="margin-left:auto;color:var(--on-accent)">8 分 30 秒</span></button>
+              <button class="btn" id="actStrip" type="button">③ 去和弦 → 改用「仅旋律」（翻唱）</button>
+              <button class="btn" id="actIns" type="button">④ 器乐化：人声移到伴奏声部</button>
+            </div>
+            <div class="hint">每个动作都生成<b>新任务</b>并挂在谱系上，原任务与音频不受影响。</div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ---------- BATCH ---------- -->
+    <section class="view" id="v-batch" aria-labelledby="batch-h">
+      <div class="vhead"><h1 id="batch-h">批量生成</h1>
+        <p>每行一个请求，编号必须唯一。本机后端<b>并发恒为 1</b>，逐个跑；失败行保留 <span class="idn">failure.json</span> 不阻塞后续。</p></div>
+      <div class="card">
+        <div class="inline" style="justify-content:space-between;margin-bottom:var(--sp4)">
+          <div class="inline"><span class="badge mono">songs.jsonl · 6 行</span>
+            <span class="sub">校验通过 6/6</span></div>
+          <div class="inline">
+            <button class="btn sm" id="btnImp" type="button">导入清单文件</button>
+            <button class="btn sm" id="btnResume" type="button">校验已完成任务</button>
+            <button class="btn sm primary" id="btnRunBatch" type="button">全部排队</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto"><table class="tbl">
+          <thead><tr><th>编号</th><th>风格描述</th><th>模式</th><th>种子</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody id="batchBody"></tbody>
+        </table></div>
+        <div class="cost" style="margin-top:var(--sp4)">
+          <span>全部生成预计</span><b>51 分钟</b><span style="color:var(--text3)">= 6 首 × 8 分 30 秒（CPU，无排队）</span>
+          <span class="brk" id="bk2" role="button" tabindex="0">更省的方案 ▾</span>
+          <ul>
+            <li><span>先只出谱，批量看结构</span><b>6 首约 5 分钟</b></li>
+            <li><span>用「不规划」模式跳过谱面</span><b>每首省约 53 秒</b></li>
+            <li><span>官方 24GB 显卡口径</span><b>本机未验证</b></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- LIBRARY ---------- -->
+    <section class="view" id="v-library" aria-labelledby="lib-h">
+      <div class="vhead">
+        <div class="inline" style="justify-content:space-between;align-items:flex-start;gap:var(--sp4);flex-wrap:wrap">
+          <div><h1 id="lib-h">曲库</h1><p>每次生成 = 一条带谱系的任务。选 2–4 条进入 A/B 盲听对比。</p></div>
+          <div class="inline">
+            <button class="btn sm" id="btnAB" type="button" disabled>A/B 对比（<span id="abN">0</span>）</button>
+            <button class="btn sm" id="btnTrash" type="button">回收站</button>
+          </div>
+        </div>
+        <div class="inline" style="margin-top:var(--sp4);gap:var(--sp2)">
+          <input class="inp" id="libSearch" placeholder="搜索风格 / 编号 / 歌词关键词" style="max-width:340px;min-height:40px">
+          <button class="chip" aria-pressed="true" type="button">全部</button>
+          <button class="chip" aria-pressed="false" type="button">已完成</button>
+          <button class="chip" aria-pressed="false" type="button">有截断</button>
+          <button class="chip" aria-pressed="false" type="button">失败</button>
+          <button class="chip" aria-pressed="false" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.6 6.2.9-4.5 4.4 1 6.1-5.5-2.9-5.5 2.9 1-6.1L3 9.5l6.2-.9z"/></svg>收藏</button>
+        </div>
+      </div>
+      <div class="grid" id="libGrid"></div>
+    </section>
+
+    <!-- ---------- SYSTEM ---------- -->
+    <section class="view" id="v-system" aria-labelledby="sys-h">
+      <div class="vhead"><h1 id="sys-h">系统与模型</h1><p>模型常驻在独立工作进程里；卸载即结束该进程，显存彻底释放。</p></div>
+      <div class="cols" style="grid-template-columns:minmax(0,1fr) 400px">
+        <div>
+          <div class="card" style="margin-bottom:var(--sp5)">
+            <div class="inline" style="justify-content:space-between">
+              <h2><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg>模型状态</h2>
+              <span class="badge fail" id="sysState">未加载</span>
+            </div>
+            <div class="insp" style="margin-top:var(--sp4)">
+              <div class="kv"><div class="k">主模型</div><div class="v mono" style="font-size:14px" data-notr>YuE2-3B</div></div>
+              <div class="kv"><div class="k">权重</div><div class="v" style="font-size:14px">7.26 GB</div></div>
+              <div class="kv"><div class="k">解码器</div><div class="v mono" style="font-size:14px" data-notr>YuE2-Vae</div></div>
+              <div class="kv"><div class="k">校验和</div><div class="v mono" style="font-size:14px" data-notr>SHA256 a91f…c27e</div></div>
+            </div>
+            <div class="inline" style="margin-top:var(--sp4)">
+              <button class="btn primary" id="btnLoad2" type="button">加载到 CPU</button>
+              <button class="btn" type="button" disabled>加载到 GPU</button>
+              <button class="btn ghost" id="btnUnload" type="button" disabled>卸载</button>
+              <span class="sub" style="margin-left:auto">加载耗时 72 秒（首次校验权重 31 秒）</span>
+            </div>
+            <div class="note bad" style="margin-top:var(--sp4)">
+              <b>GPU 不可用：</b>空闲显存需 ≥5 GiB，本机 8 GB 装完权重就贴满，自回归阶段必然显存溢出；FP8 需算力 ≥8.9（本机 8.6）。
+              自动降级到 CPU 是常态，不是故障。
+            </div>
+          </div>
+          <div class="card">
+            <h2><svg viewBox="0 0 24 24"><path d="m5 13 4 4L19 7"/></svg>环境自检</h2>
+            <div class="sub" style="margin:var(--sp2) 0 var(--sp4)">命令 <span class="idn">yue2 doctor</span> · 依赖就绪</div>
+            <div style="overflow-x:auto"><table class="tbl">
+              <tbody>
+                <tr><td style="width:40%" class="mono" data-notr>torch</td><td class="mono" data-notr>2.9.1+cu128</td><td><span class="state run">未验证组合</span></td></tr>
+                <tr><td class="mono" data-notr>transformers</td><td class="mono" data-notr>4.57.6</td><td><span class="state done">符合版本锁定</span></td></tr>
+                <tr><td class="mono" data-notr>huggingface-hub</td><td class="mono" data-notr>0.36.2</td><td><span class="state done">符合版本锁定</span></td></tr>
+                <tr><td class="mono" data-notr>tiktoken / safetensors / soundfile</td><td class="mono" data-notr>0.12.0 / 0.7.0 / 0.13.1</td><td><span class="state done">符合版本锁定</span></td></tr>
+                <tr><td>显卡</td><td class="mono">RTX 3060 Ti · 8GB · 算力 8.6</td><td><span class="state done">BF16 可用</span> <span class="state fail">FP8 不可用</span></td></tr>
+                <tr><td>磁盘剩余</td><td class="mono">— GB</td><td><span class="state queue">待检测</span></td></tr>
+                <tr><td>后端</td><td class="mono" data-notr>torch-eager</td><td><span class="state done">可用</span>（<span class="idn">vllm</span> 仅支持 Linux）</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+        </div>
+        <aside>
+          <div class="card" style="margin-bottom:var(--sp4)">
+            <h2><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/></svg>本机能力开关</h2>
+            <div style="margin-top:var(--sp4);display:grid;gap:var(--sp3);font-size:14px">
+              <label class="inline" style="justify-content:space-between"><span>分阶段驻留</span><span class="state done">开</span></label>
+              <label class="inline" style="justify-content:space-between"><span>FP8 量化</span><span class="state fail">硬件不支持</span></label>
+              <label class="inline" style="justify-content:space-between"><span>高速推理后端</span><span class="state fail">仅 Linux</span></label>
+              <label class="inline" style="justify-content:space-between"><span>并发大于 1</span><span class="state fail">官方禁止共享实例</span></label>
+              <label class="inline" style="justify-content:space-between"><span>任务取消</span><span class="state run">阶段边界生效</span></label>
+            </div>
+          </div>
+          <div class="card">
+            <h2><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 10h16M10 10v10"/></svg>存储</h2>
+            <ul style="list-style:none;margin-top:var(--sp4);font-size:14px;color:var(--text2)">
+              <li style="padding:var(--sp2) 0;border-bottom:1px solid var(--hairline)"><span class="mono" data-notr>runs/jobs/</span> <span class="mono" style="color:var(--text3)">3 个任务</span></li>
+              <li style="padding:var(--sp2) 0;border-bottom:1px solid var(--hairline)"><span class="mono" data-notr>runs/_trash/</span> <span class="mono" style="color:var(--text3)">回收站 0 项</span></li>
+              <li style="padding:var(--sp2) 0;border-bottom:1px solid var(--hairline)"><span class="mono" data-notr>models/YuE2-3B</span> <span class="mono" style="color:var(--text3)">7.26 GB</span></li>
+              <li style="padding:var(--sp2) 0"><span class="mono" data-notr>models/YuE2-Vae</span> <span class="mono" style="color:var(--text3)">0.53 GB</span></li>
+            </ul>
+            <div class="hint" style="margin-top:var(--sp3)">任务状态以磁盘上的结果文件与失败文件为准，重启自动恢复；元数据文件只存界面字段，可随时重建。</div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ TRANSPORT ============ -->
+  <footer class="trans">
+    <button class="pp" id="ppBtn" type="button" aria-label="播放或暂停">
+      <svg viewBox="0 0 16 16" id="ppIcon"><path d="M4 2l10 6-10 6z"/></svg>
+    </button>
+    <div class="tmeta"><div class="tn" id="tName" data-notr>晚风穿过城市</div><div class="ts" id="tSub" data-notr>song_20261022_110759 · 0:42 · 48kHz</div></div>
+    <div class="tprog">
+      <span class="tm" id="tCur">0:12</span>
+      <div class="track"><div class="wave" id="wave" role="slider"
+        aria-label="播放进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="28" tabindex="0"></div></div>
+      <span class="tm" id="tDur">0:42</span>
+    </div>
+    <div class="ab" role="group" aria-label="A/B 对比">
+      <button class="on" data-ab="a" type="button">A</button><button data-ab="b" type="button">B</button>
+    </div>
+    <div class="vol"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/></svg>
+      <input type="range" id="volR" min="0" max="100" value="90" aria-label="音量"></div>
+  </footer>
+</div>
+
+<div class="demo-flag">演示：全部为假数据，不连后端、不产音频，按钮交互均为本地模拟。</div>
+<div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+<div class="scrim" id="scrim"></div>
+<div class="modal" id="keysModal" role="dialog" aria-modal="true" aria-labelledby="keysH" tabindex="-1">
+  <div class="mh"><h3 id="keysH">键盘快捷键</h3>
+    <button class="iconbtn" id="keysX" type="button" aria-label="关闭" style="margin-left:auto">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="mb"><table class="tbl"><tbody>
+    <tr><td style="width:40%">切换视图</td><td><kbd>1</kbd>–<kbd>5</kbd></td></tr>
+    <tr><td>生成歌曲</td><td><kbd>Ctrl</kbd> + <kbd>回车</kbd></td></tr>
+    <tr><td>播放 / 暂停</td><td><kbd>空格</kbd>（输入框内不触发）</td></tr>
+    <tr><td>切换界面语言</td><td><kbd>L</kbd></td></tr>
+    <tr><td>切换深浅色主题</td><td><kbd>T</kbd></td></tr>
+    <tr><td>关闭弹层</td><td><kbd>Esc</kbd></td></tr>
+    <tr><td>本帮助</td><td><kbd>?</kbd></td></tr>
+  </tbody></table>
+  <div class="hint">界面语言只翻译操作文字；文件名、参数名、歌词与歌名属于数据，不翻译。正式实现会补齐焦点陷阱、进度无障碍播报与动效降级（演示已内置）。</div></div>
+</div>
+
+<script>
+"use strict";
+/* ================= 状态（正式版由 SSE + /api/jobs 驱动） ================= */
+const S = {
+  view:"studio", cot:"full", dev:"cpu", loaded:false, playing:false, styleSrc:false,
+  lyrics:[
+    {tag:"Verse",text:"晚风轻轻吹过窗前\n你留下的笑还在昨天"},
+    {tag:"Chorus",text:"让这首歌陪你走远\n把所有想念唱成明天"}],
+  jobs:[
+    {id:"song_20261022_133410",name:"晚风穿过城市 · 改和声版",st:"running",cot:"full",seed:831001,
+     style:"Mandarin, city pop, warm female vocal, electric piano, acoustic guitar, 96 BPM",
+     bars:{plan:100,sem:41,nar:0,dec:0},elapsed:214,eta:428,rate:"18.4",tokens:3698,art:false,parent:"song_20261022_110759"},
+    {id:"song_20261022_134022",name:"同词不同种子（候选 2）",st:"queued",cot:"full",seed:null,
+     style:"Mandarin, city pop, warm female vocal, electric piano, 96 BPM",art:false},
+    {id:"song_20261022_110759",name:"晚风穿过城市（原始）",st:"done",cot:"full",seed:831001,
+     style:"Mandarin, city pop, warm female vocal, electric piano, 96 BPM",dur:42.3,secs:509,art:true},
+    {id:"song_20261021_230103",name:"英式爵士小样",st:"failed",cot:"full",seed:7,
+     style:"English, jazz-funk, warm lead vocal, Rhodes",err:"CUDA out of memory",
+     fix:["改用 CPU，或下调显存配额","把歌词精简到 2 段以内","保留失败记录便于比对"]}
+  ],
+  lib:[
+    {id:"song_20261022_110759",name:"晚风穿过城市（原始）",t:"0:42",cot:"full",dev:"cpu",d:"10-22 11:07",st:"done",star:true,seed:831001},
+    {id:"song_20261022_095510",name:"City Lights",t:"1:58",cot:"full",dev:"cpu",d:"10-22 09:55",st:"done",star:true,seed:414},
+    {id:"song_20261021_204418",name:"雨夜器乐版",t:"2:11",cot:"full",dev:"cpu",d:"10-21 20:44",st:"done",star:false,seed:2026},
+    {id:"song_20261021_230103",name:"英式爵士小样",t:"—",cot:"melody",dev:"cuda",d:"10-21 23:01",st:"fail",star:false,seed:7},
+    {id:"song_20261022_003312",name:"副歌只唱了一半",t:"0:19",cot:"full",dev:"cpu",d:"10-22 00:33",st:"trunc",star:false,seed:99},
+    {id:"song_20261022_102145",name:"不规划速试（无谱）",t:"1:02",cot:"off",dev:"cpu",d:"10-22 10:21",st:"done",star:false,seed:null}
+  ],
+  batch:[
+    {id:"b01_dawn",style:"Mandarin, folk ballad, acoustic guitar, soft female vocal, 76 BPM",cot:"full",seed:101,st:"done"},
+    {id:"b02_subway",style:"Mandarin, mandarin rock, electric guitar, male vocal, 128 BPM",cot:"full",seed:102,st:"run"},
+    {id:"b03_rain",style:"English, synthwave, breathy female vocal, 104 BPM",cot:"off",seed:null,st:"queue"},
+    {id:"b04_cassette",style:"Mandarin, city pop, warm female vocal, 92 BPM",cot:"full",seed:104,st:"queue"},
+    {id:"b05_nightbus",style:"Cantonese, acoustic pop, warm male vocal, 88 BPM",cot:"melody",seed:105,st:"fail"},
+    {id:"b06_letters",style:"English, jazz-funk, warm lead vocal, Rhodes, bass, 96 BPM",cot:"full",seed:106,st:"queue"}
+  ],
+  sampling:{
+    abc:[["temperature",0.7,0,2,0.01],["top_p",0.9,0,1,0.01],["top_k",30,1,200,1],["repetition_penalty",1.005,1,2,0.005]],
+    abc2:[["penalty_window",100,1,100,1],["min_tokens",32,0,2000,1],["max_tokens",4096,128,8192,64]],
+    sem:[["temperature",1.0,0,5,0.01],["top_p",0.95,0,1,0.01],["top_k",100,1,400,1],["repetition_penalty",1.2,0.5,2,0.01]],
+    sem2:[["penalty_window",50,1,100,1],["min_tokens",200,0,1000,10],["max_tokens",9000,256,12000,128]]
+  }
+};
+const ABC = `X:1
+T:
+M:4/4
+L:1/16
+Q:1/4=88
+V: Vocal clef=treble name="Vocal Melody" snm="Vocal"
+V: Ins clef=treble name="Ins Melody" snm="Inst."
+K:C
+% verse
+V: Vocal
+"C"E2G2A2G2E2D2C4|"G"D2E2G2E2D2C2D4|"Am"E2G2A2c2B2A2G4|"F"F2E2D2E2G2E2C4|
+V: Ins
+Z4|
+% chorus
+V: Vocal
+"C"G2A2c2B2A2G2E4|"F"F2A2G2E2D2E2G4|"G"A2c2B2A2G2E2D4|"C"E2G2A2G2E2D2C4|
+V: Ins
+Z4|`;
+let abcText = ABC.replace("Q:1/4=88","Q:1/4=96").replace('"G"D2E2G2E2D2C2D4','"Dsus4"D2E2G2E2D2C2D4');
+
+/* ================= utils ================= */
+const $=id=>document.getElementById(id), t=s=>String(s);
+const esc=s=>t(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt=s=>{s=Math.max(0,Math.round(s));return `${(s/60)|0}:${String(s%60).padStart(2,"0")}`};
+function toast(msg,kind){
+  const box=$("toasts"),el=document.createElement("div");
+  el.className="toast"+(kind?" "+kind:"");
+  const ic={ok:'<path d="m5 13 4 4L19 7"/>',warn:'<path d="M12 8v5M12 16h.01M12 3 2 21h20z"/>',
+    bad:'<path d="M12 8v5M12 16h.01M12 3 2 21h20z"/>',info:'<path d="M12 8h.01M11 12h1v5h1"/>'}[kind||"info"];
+  el.innerHTML=`<svg viewBox="0 0 24 24">${ic}</svg><span>${esc(msg)}</span>`;
+  box.appendChild(el); requestAnimationFrame(()=>el.classList.add("in"));
+  setTimeout(()=>{el.classList.remove("in");setTimeout(()=>el.remove(),240)},3600);
+}
+/* ================= 路由 ================= */
+const VIEWS=["studio","score","batch","library","system"];
+function go(v){
+  if(!VIEWS.includes(v))v="studio";
+  S.view=v;
+  document.querySelectorAll(".view").forEach(e=>e.classList.toggle("active",e.id==="v-"+v));
+  document.querySelectorAll(".nav").forEach(e=>{
+    const on=e.dataset.view===v; e.classList.toggle("active",on);
+    on?e.setAttribute("aria-current","page"):e.removeAttribute("aria-current");
+  });
+  location.hash="#/"+v;
+  $("work").scrollTo({top:0,behavior:"prefers-reduced-motion"===matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+}
+document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>go(b.dataset.view));
+addEventListener("hashchange",()=>go(location.hash.replace("#/","")||"studio"));
+
+/* ================= studio ================= */
+function styleText(){
+  if(S.styleSrc) return $("fStyle").value.trim();
+  const pick=d=>[...document.querySelectorAll(`[data-dim=${d}] [aria-pressed=true]`)].map(b=>b.dataset.token);
+  return [$("fLang").value,...pick("genre"),...pick("vocal"),...pick("inst"),$("fBpm").value+" BPM"]
+    .filter(Boolean).join(", ");
+}
+function syncStyle(){
+  const s=styleText(); $("styleOut").textContent=s||T("（未完成）");
+  if(S.styleSrc)$("fStyle").value=s;
+  document.querySelectorAll(".chipset .chip").forEach(c=>{
+    c.onclick=()=>{c.setAttribute("aria-pressed",c.getAttribute("aria-pressed")==="true"?"false":"true");syncStyle()};
+  });
+}
+document.querySelectorAll(".mode").forEach(m=>m.onclick=()=>{
+  S.cot=m.dataset.cot;
+  document.querySelectorAll(".mode").forEach(x=>x.setAttribute("aria-pressed",String(x===m)));
+  const d=S.cot==="off"?1.01:1; $("sCfg").value=d; slider($("sCfg")); $("vCfg").textContent=d.toFixed(2);
+  toast(S.cot==="off"?T("不规划模式：不产出可编辑乐谱，无法改谱重渲"):T("已切到 {0} 模式",S.cot));
+});
+$("btnStyleSrc").onclick=e=>{
+  S.styleSrc=!S.styleSrc; e.currentTarget.setAttribute("aria-pressed",String(S.styleSrc));
+  e.currentTarget.textContent=S.styleSrc?T("字段模式"):T("文本模式");
+  $("styleFields").hidden=S.styleSrc; $("styleSrcBox").hidden=!S.styleSrc; syncStyle();
+};
+["fLang","fBpm"].forEach(id=>$(id).oninput=syncStyle);
+$("fLang").onchange=syncStyle;
+$("fStyle").oninput=()=>{ $("styleOut").textContent=$("fStyle").value.trim()||T("（未完成）") };
+$("btnPreset").onclick=()=>{
+  $("fLang").value="Mandarin"; $("fBpm").value=88;
+  document.querySelectorAll('[data-dim=genre] .chip').forEach((c,i)=>c.setAttribute("aria-pressed",String(i===1)));
+  document.querySelectorAll('[data-dim=inst] .chip').forEach((c,i)=>c.setAttribute("aria-pressed",String(i===1)));
+  document.querySelectorAll('[data-dim=vocal] .chip').forEach((c,i)=>c.setAttribute("aria-pressed",String(i===0)));
+  syncStyle(); toast(T("已载入官方示例风格的中文范例"),"ok");
+};
+/* 歌词段落 */
+const SYL=/[\u4e00-\u9fa5]/g;
+function renderLyrics(){
+  $("secs").innerHTML=S.lyrics.map((s,i)=>{
+    const lines=s.text.split("\n").filter(x=>x.trim());
+    const cnt=lines.map(l=>(l.match(SYL)||[]).length||l.split(/\s+/).filter(Boolean).length);
+    const warn=cnt.some(c=>c>14||c<4);
+    return `<div class="sec">
+      <div class="sechead"><span class="sectag" data-notr>[${esc(s.tag)}]</span>
+        <span class="ln">${T("{0} 行",lines.length)}</span>
+        <button class="iconbtn" data-mv="${i}" aria-label="${T("上移段落")}"><svg viewBox="0 0 24 24"><path d="m6 14 6-6 6 6"/></svg></button>
+        <button class="iconbtn" data-md="${i}" aria-label="${T("删除段落")}"><svg viewBox="0 0 24 24"><path d="M4 6h16M9 6V4h6v2M7 6l1 14h8l1-14"/></svg></button>
+      </div>
+      <textarea data-sec="${i}" aria-label="${esc(s.tag)} ${T("段落歌词")}" data-notr>${esc(s.text)}</textarea>
+      <div class="syl"><span>${T("每行音节数 {0}",cnt.join(" · ")||"—")}</span>${warn?`<span class="b">${T("长度失衡，易唱飘")}</span>`:""}</div>
+    </div>`;
+  }).join("");
+  $("secs").querySelectorAll("textarea[data-sec]").forEach(ta=>ta.oninput=()=>{
+    S.lyrics[+ta.dataset.sec].text=ta.value; lint();
+  });
+  $("secs").querySelectorAll("[data-mv]").forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.mv; if(i===0)return toast(T("已经是第一段了"),"warn");
+    [S.lyrics[i-1],S.lyrics[i]]=[S.lyrics[i],S.lyrics[i-1]]; renderLyrics();
+  });
+  $("secs").querySelectorAll("[data-md]").forEach(b=>b.onclick=()=>{
+    if(S.lyrics.length<=1)return toast(T("至少保留一个段落"),"warn");
+    S.lyrics.splice(+b.dataset.md,1); renderLyrics(); lint(); toast(T("段落已删除"),"ok");
+  });
+}
+$("btnAddSec").onclick=()=>{
+  S.lyrics.push({tag:S.lyrics.length%2?"Chorus":"Verse",text:""}); renderLyrics();
+  const last=$("secs").querySelector("textarea:last-of-type"); last&&last.focus();
+};
+function lint(){
+  const note=$("lintNote"), body=S.lyrics.map(l=>"["+l.tag+"]\n"+l.text).join("\n\n");
+  if(S.lyrics.some(l=>!l.text.trim()||!l.tag)){note.hidden=false;note.className="note";
+    note.innerHTML=T("@lint_empty");return false}
+  if(!/\[Chorus\]/.test(body)){note.hidden=false;note.className="note";
+    note.innerHTML=T("@lint_chorus");return false}
+  note.hidden=true; return true;
+}
+$("btnLint").onclick=()=>{const ok=lint();toast(ok?T("结构检查通过：段落标记完整"):T("结构有告警，见歌词下方"),ok?"ok":"warn")};
+$("btnDice").onclick=()=>{ $("fSeed").value=Math.floor(Math.random()*1e6) };
+["cOff","cEager","cOffline"].forEach(id=>$(id).onclick=e=>{
+  const on=e.currentTarget.getAttribute("aria-pressed")!=="true";
+  e.currentTarget.setAttribute("aria-pressed",String(on));
+  const msg=id==="cEager"?(on?T(" torch-eager：关闭 CUDA 计算图，兼容性兜底、略慢"):T(" 开启 CUDA 计算图（官方后端默认）"))
+    :id==="cOff"?(on?T(" 分阶段驻留：当前阶段留在设备，另一阶段暂存内存"):T(" 两阶段同时驻留，显存需求更高"))
+    :(on?T(" 仅使用本地已下载的模型"):T(" 允许联网拉取模型"));
+  toast(msg,on?"ok":"warn");
+});
+/* 高级参数 */
+function slider(r){ r.style.setProperty("--p",((r.value-r.min)/(r.max-r.min)*100)+"%") }
+function buildCtl(target,list,tag){
+  $(target).innerHTML=list.map(([n,v,mn,mx,st])=>`<div class="ctl">
+    <div class="row"><span class="name mono" data-notr>${n}</span><span class="dft">${T("默认值 {0}",v)}</span><span class="val" id="v-${tag}-${n}">${v}</span></div>
+    <input type="range" data-tag="${tag}" data-n="${n}" min="${mn}" max="${mx}" step="${st}" value="${v}" aria-label="${n}"></div>`).join("");
+  $(target).querySelectorAll("input[type=range]").forEach(r=>{
+    slider(r); r.oninput=()=>{ const dec=String(r.step).includes(".")?String(r.step).split(".")[1].length:0;
+      $("v-"+r.dataset.tag+"-"+r.dataset.n).textContent=Number(r.value).toFixed(dec); slider(r); markCustom() };
+  });
+}
+function markCustom(){ $("advBadge").textContent=T("已自定义采样"); $("advBadge").className="badge run" }
+buildCtl("grpAbc",S.sampling.abc,"abc"); buildCtl("grpAbc2",S.sampling.abc2,"abc");
+buildCtl("grpSem",S.sampling.sem,"sem"); buildCtl("grpSem2",S.sampling.sem2,"sem");
+$("sCfg").oninput=e=>{slider(e.target);$("vCfg").textContent=Number(e.target.value).toFixed(2);markCustom()};
+$("sOde").oninput=e=>{slider(e.target);$("vOde").textContent=e.target.value;markCustom()};
+$("sCfg").style.setProperty("--p","33%"); $("sOde").style.setProperty("--p","44%");
+$("btnReset").onclick=()=>{
+  document.querySelectorAll('input[type=range][data-n]').forEach(r=>{
+    const d=S.sampling[r.dataset.tag].concat(S.sampling[r.dataset.tag+"2"]).find(x=>x[0]===r.dataset.n);
+    if(d){r.value=d[1];slider(r);$("v-"+r.dataset.tag+"-"+r.dataset.n).textContent=d[1]}
+  });
+  $("sCfg").value=S.cot==="off"?1.01:1; $("vCfg").textContent=Number($("sCfg").value).toFixed(2); slider($("sCfg"));
+  $("sOde").value=32; $("vOde").textContent="32"; slider($("sOde"));
+  $("advBadge").textContent=T("官方默认"); $("advBadge").className="badge"; toast(T("已复位到官方默认"),"ok");
+};
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".tabs button").forEach(x=>x.setAttribute("aria-selected",String(x===b)));
+  document.querySelectorAll(".tabpanel").forEach(p=>p.hidden=true); $("tab-"+b.dataset.tab).hidden=false;
+});
+document.querySelectorAll(".acc > .t").forEach(t=>t.onclick=()=>{
+  const a=t.parentElement, open=!a.classList.contains("open");
+  a.classList.toggle("open",open); t.setAttribute("aria-expanded",String(open));
+});
+/* 成本条 */
+$("costBrk").onclick=$("bk2").onclick=e=>e.currentTarget.closest(".cost").classList.toggle("open");
+function updCost(){
+  const n=+$("fVar").value, q=S.jobs.filter(j=>j.st==="running"||j.st==="queued").length;
+  $("costT").textContent=fmt(n*510);
+  $("costQ").textContent=q>1?q-1:0;
+}
+$("fVar").onchange=()=>{updCost(); if(+$("fVar").value>1)toast(T("候选数量 = 排队 {0} 个不同种子的独立任务，可并排对比",$("fVar").value),"warn")};
+/* 设备 / 模型 */
+document.querySelectorAll(".devseg button").forEach(b=>b.onclick=()=>{
+  S.dev=b.dataset.dev;
+  document.querySelectorAll(".devseg button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+  if(S.dev==="cuda")toast(T("本机 8GB：加载到显卡会在自回归阶段显存溢出，按实测已降级到 CPU"),"warn"); else updCost();
+});
+function setModel(state){
+  S.loaded=state==="on";
+  const m=$("mstat"); m.className="mstatus"+(state==="on"?" on":state==="busy"?" busy":"");
+  $("mstatText").textContent=state==="on"?T("模型已加载 · CPU · 72 秒")
+    :state==="busy"?T("模型加载中（约 72 秒）…"):T("模型未加载 · 只能用 CPU（3060 Ti 8GB 显存不足）");
+  $("btnLoad").querySelector(".lb").textContent=state==="on"?T("卸载模型"):state==="busy"?T("加载中…"):T("加载模型");
+  $("sysState").textContent=state==="on"?T("已加载 · CPU"):state==="busy"?T("加载中"):T("未加载");
+  $("sysState").className="badge "+(state==="on"?"done":state==="busy"?"run":"fail");
+  $("btnUnload").disabled=state!=="on";
+  $("btnLoad2").textContent=state==="on"?T("已加载到 CPU"):T("加载到 CPU");
+}
+$("btnLoad").onclick=$("btnLoad2").onclick=()=>{
+  if(S.loaded){setModel("off");return toast(T("模型已卸载，工作进程已退出，内存已释放"),"ok")}
+  setModel("busy"); setTimeout(()=>{setModel("on");toast(T("模型已加载到 CPU · 可以开始生成"),"ok")},1800);
+};
+/* 提交 */
+$("btnGen").onclick=()=>{
+  const st=styleText(), ly=S.lyrics.map(l=>"["+l.tag+"]\n"+l.text).join("\n\n");
+  if(!st)return toast(T("风格描述为空 —— 至少要写语言或流派"),"bad");
+  if(!ly.trim())return toast(T("歌词为空"),"bad");
+  if(!lint())return toast(T("歌词结构有告警，已阻止提交（可点「+ 段落」补结构）"),"bad");
+  const n=+$("fVar").value, id="song_20261022_"+String(140000+Math.floor(Math.random()*999)).slice(0,6);
+  const first=S.lyrics[0].text.split("\n")[0]||"";
+  S.jobs.unshift({id,name:first.slice(0,12)||"新歌",nk:!first,
+    st:"queued",cot:S.cot,seed:$("fSeed").value?+$("fSeed").value:null,style:st,art:false});
+  if(n>1)S.jobs.unshift({id:id+"_v2",name:"候选 2（随机种子）",nk:true,st:"queued",cot:S.cot,seed:null,style:st,art:false});
+  renderQueue(); updCost();
+  toast(T("已排队 {0} 个任务{1}",n,S.loaded?"":T(" · 生成前会先加载模型（约 72 秒）")),"ok");
+};
+/* 队列渲染 */
+function stagebar(j){
+  const b=j.bars||{plan:0,sem:0,nar:0,dec:0};
+  const seg=(v,act)=>`<span class="sg ${v===100?"done":act?"act":""}"></span>`;
+  return `<div class="stagebar">${seg(b.plan)}${seg(b.sem,1)}${seg(b.nar)}${seg(b.dec)}</div>
+    <div class="slabels"><i class="done">${T("规划乐谱")}</i><i class="act">${T("语义生成")} ${b.sem}%</i>
+      <i>${T("非自回归合成")}</i><i>${T("解码导出")}</i></div>
+    <div class="metrics"><span>${T("已用")} <b>${fmt(j.elapsed)}</b></span><span>${T("预计还需")} <b>${fmt(j.eta)}</b></span>
+      <span>${T("速率")} <b>${T("{0} 词元/秒",j.rate)}</b></span><span>${T("词元")} <b>${j.tokens}</b> / 9000</span></div>`;
+}
+function renderQueue(){
+  $("queue").innerHTML=S.jobs.map(j=>{
+    const badge={running:`<span class="badge run"><svg viewBox="0 0 24 24"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/></svg>${T("生成中")}</span>`,
+      queued:`<span class="badge queue">${T("排队中")}</span>`,done:`<span class="badge done"><svg viewBox="0 0 24 24"><path d="m5 13 4 4L19 7"/></svg>${T("已完成")}</span>`,
+      failed:`<span class="badge fail"><svg viewBox="0 0 24 24"><path d="M12 8v5M12 16h.01"/><circle cx="12" cy="12" r="9"/></svg>${T("失败")}</span>`}[j.st];
+    let body=`<div class="jt"><div style="flex:1;min-width:0"><div class="jname" data-notr>${j.cancelled?T("已取消")+" · ":""}${esc(j.nk?T(j.name):j.name)}</div><div class="jid mono" data-notr>${esc(j.id)} · ${j.cot}${j.seed?" · "+T("种子")+" "+j.seed:""}</div></div>
+      ${badge}<div class="acts">`;
+    if(j.st==="running")body+=`<button class="btn sm" data-cancel="${j.id}" type="button">${T("取消")}</button>`;
+    if(j.st==="done")body+=`<button class="btn sm" data-score="${j.id}" type="button">${T("乐谱")}</button>
+      <button class="btn sm" data-play="${j.id}" type="button">${T("试听")}</button>
+      <button class="btn sm ghost" data-dup="${j.id}" type="button">${T("复制参数")}</button>`;
+    if(j.st==="failed")body+=`<button class="btn sm" data-dup="${j.id}" type="button">${T("改参数重试")}</button>`;
+    if(j.st!=="running")body+=`<button class="btn sm ghost" data-del="${j.id}" type="button" aria-label="${T("删除任务")} ${esc(j.id)}">${T("删除")}</button>`;
+    body+=`</div></div><div class="jstyle" data-notr>${esc(j.style)}</div>`;
+    if(j.st==="running")body+=`<div class="stages">${stagebar(j)}
+      <div class="logt mono" data-notr>[YuE2] Running Generating song: 3698 tokens · 18.4 tok/s · chunk 2/3</div></div>`;
+    if(j.st==="queued")body+=`<div class="sub" style="margin-top:var(--sp3)">${T("排队第 1 位 · 前面还有 1 个任务（约 7 分钟）")}</div>`;
+    if(j.st==="done")body+=`<div class="metrics"><span>${T("时长")} <b class="mono">${j.dur}s</b></span><span>${T("耗时")} <b>${fmt(j.secs)}</b></span>
+      <span data-notr>truncated <b class="mono">false</b></span></div>
+      <div class="art"><a href="#" data-notr>audio.flac</a><a href="#" data-notr>score.abc</a><a href="#" data-notr>plan.json</a>
+      <a href="#" data-notr>latent.npy</a><a href="#" data-notr>result.json</a><a href="#" data-notr>request.json</a></div>`;
+    if(j.st==="failed")body+=`<div class="note bad" style="margin-top:var(--sp3)">${esc(T(j.err))}
+      <ul style="margin:var(--sp2) 0 0 var(--sp4);font-size:13px">${j.fix.map(f=>`<li>${esc(T(f))}</li>`).join("")}</ul></div>
+      <div class="art"><a href="#" data-notr>failure.json</a></div>`;
+    return `<div class="jobc${j.st==="running"?" live":""}">${body}</div>`;
+  }).join("");
+  $("cStudio").textContent=S.jobs.filter(j=>j.st==="running"||j.st==="queued").length;
+  const run=S.jobs.filter(j=>j.st==="running").length,q=S.jobs.filter(j=>j.st==="queued").length;
+  $("qBadge").textContent=T("{0} 运行 · {1} 排队",run,q);
+  $("queue").querySelectorAll("[data-cancel]").forEach(b=>b.onclick=()=>cancel(b.dataset.cancel));
+  $("queue").querySelectorAll("[data-score]").forEach(b=>b.onclick=()=>{go("score");toast(T("已载入该任务的乐谱（score.abc）"))});
+  $("queue").querySelectorAll("[data-play]").forEach(b=>b.onclick=()=>play());
+  $("queue").querySelectorAll("[data-dup]").forEach(b=>b.onclick=()=>{go("studio");toast(T("参数已回填到创作表单，随机种子保持不变"),"ok")});
+  $("queue").querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+    const i=S.jobs.findIndex(x=>x.id===b.dataset.del); S.jobs.splice(i,1); renderQueue(); updCost();
+    toast(T("已移入回收站（保留 30 天）"),"ok");
+  });
+}
+function cancel(id){
+  const j=S.jobs.find(x=>x.id===id); if(!j)return;
+  toast(T("取消请求已发出 · 非自回归与解码阶段没有取消点，将在当前阶段结束后停止"),"warn");
+  setTimeout(()=>{
+    const i=S.jobs.findIndex(x=>x.id===id);
+    S.jobs[i]={id:j.id+"_cancelled",name:j.name,cancelled:true,st:"failed",cot:j.cot,seed:j.seed,style:j.style,
+      err:"用户取消（语义阶段结束时生效）",fix:["中间产物已保留，可从乐谱阶段续跑","或直接改参数重新排队"]};
+    renderQueue(); updCost(); toast(T("任务已取消，产物目录保留"),"ok");
+  },2600);
+}
+/* ================= score ================= */
+const TOK=/("[^"]*"|[Zz]\d*|\[[A-Za-z]:|\|[0-9.\]]*|[A-Ga-g][,']?\d*|\s|[\s\S])/g;
+function hlMusic(line){
+  let out="";
+  for(const m of line.match(TOK)||[]){
+    const s=esc(m);
+    if(m[0]==='"')out+=`<span class="hl-ck">${s}</span>`;
+    else if(/[Zz]/.test(m[0])&&/^\d*$/.test(m.slice(1)))out+=`<span class="rd">${s}</span>`;
+    else if(m[0]==="|"||m[0]==="[")out+=`<span class="bar">${s}</span>`;
+    else if(/^[A-Ga-g][,']?\d*$/.test(m))out+=`<span class="nt">${s}</span>`;
+    else out+=s;
+  }
+  return out;
+}
+const HL=t=>t.split("\n").map(l=>{
+  if(/^%/.test(l))return `<span class="hl-cm">${esc(l)}</span>`;
+  if(/^V:\s*(Vocal|Ins)/.test(l))return `<span class="hl-vc">${esc(l)}</span>`;
+  if(/^[A-Za-z]:/.test(l))return `<span class="hl-hd">${esc(l)}</span>`;
+  return hlMusic(l);
+}).join("\n");
+function renderAbc(){
+  $("abcHl").innerHTML=HL(abcText)+"\n";
+  const n=abcText.split("\n").length;
+  $("gut").innerHTML=Array.from({length:n},(_,i)=>`<div>${i+1}</div>`).join("");
+  if(document.activeElement!==$("abcEd"))$("abcEd").value=abcText;
+  const bars=(abcText.match(/\|/g)||[]).length, cho=(abcText.match(/"[^"]{1,10}"/g)||[]).length;
+  const q=abcText.match(/Q:1\/4=(\d+)/);
+  $("iBars").textContent=bars-2; $("iChords").textContent=cho; $("iTempo").textContent=q?q[1]:"—";
+  $("iNotes").textContent=(abcText.match(/[A-Ga-g][,']?\d?/g)||[]).length;
+}
+$("abcEd").oninput=e=>{abcText=e.target.value;renderAbc()};
+$("abcEd").onscroll=e=>{const y=e.target.scrollTop;
+  $("abcHl").scrollTop=y;$("abcHl").scrollLeft=e.target.scrollLeft;
+  $("gut").style.transform="translateY("+(-y)+"px)"};
+$("btnAbcFmt").onclick=()=>{abcText=ABC;renderAbc();toast(T("已重载原始乐谱，本地改动已丢弃"),"warn")};
+$("actPlan").onclick=()=>{go("studio");toast(T("仅出谱：预计约 53 秒，产物 score.abc + plan.json"),"ok")};
+$("actRender").onclick=()=>{S.jobs.unshift({id:"song_20261022_141502",name:T("改谱重渲染")+" · Dsus4",st:"queued",
+  cot:"full",seed:831001,style:styleText(),parent:"song_20261022_110759",art:false});
+  renderQueue();go("studio");updCost();toast(T("重渲染已排队，乐谱谱系已挂到原始任务"),"ok")};
+$("actStrip").onclick=()=>toast(T("去和弦：已去掉 12 个和弦标记，人声与伴奏两个声部都保留 → 请改用「仅旋律」渲染"),"ok");
+$("actIns").onclick=()=>toast(T("器乐化：112 个人声音符已移入伴奏声部（音高、起奏、时值不变），3 处重叠已记录"),"ok");
+$("btnBackStudio").onclick=()=>go("studio");
+/* ================= 批量 / 曲库 ================= */
+function renderBatch(){
+  const s={done:["done",T("已完成")],run:["run",T("生成中")],queue:["queue",T("排队中")],fail:["fail",T("失败")]};
+  $("batchBody").innerHTML=S.batch.map(r=>{const[c,t2]=s[r.st];return `<tr>
+    <td class="mono" data-notr>${esc(r.id)}</td><td data-notr>${esc(r.style)}</td>
+    <td class="mono" data-notr>${r.cot}</td><td class="mono">${r.seed??T("随机")}</td>
+    <td><span class="state ${c}">${r.st==="run"?"◍":r.st==="done"?"✓":r.st==="fail"?"✕":"○"} ${t2}</span></td>
+    <td><button class="btn sm ghost" type="button">${r.st==="fail"?T("查看失败记录"):T("查看产物")}</button></td></tr>`}).join("");
+}
+$("btnRunBatch").onclick=()=>toast(T("6 个任务已入队 · 预计 51 分钟（本机后端并发恒为 1）"),"ok");
+$("btnResume").onclick=()=>toast(T("续跑校验 5/6 通过 · b05 身份哈希不匹配，将重新生成"),"warn");
+$("btnImp").onclick=()=>toast(T("支持拖入 songs.jsonl，或直接粘贴行文本（编号必须唯一）"));
+$("bk2").onclick=e=>e.currentTarget.closest(".cost").classList.toggle("open");
+function renderLib(){
+  $("libGrid").innerHTML=S.lib.map(x=>{
+    const st=x.st==="done"?`<span class="state done">✓ ${T("已完成")}</span>`:x.st==="fail"?`<span class="state fail">✕ ${T("失败")}</span>`:
+      `<span class="state run">! ${T("有截断")}</span>`;
+    const bars=Array.from({length:22},()=>{
+      const h=14+Math.random()*86, c=h>82?"hi":h>62?"mid":"lo";
+      return `<i class="${c}" style="height:${h.toFixed(0)}%"></i>`}).join("");
+    return `<button class="tcard" type="button" data-lib="${x.id}">
+      <span class="star${x.star?" on":""}" data-star="${x.id}" role="button" tabindex="-1" aria-label="${T("收藏")}"><svg viewBox="0 0 24 24"><path d="m12 3 2.8 5.6 6.2.9-4.5 4.4 1 6.1-5.5-2.9-5.5 2.9 1-6.1L3 9.5l6.2-.9z"/></svg></span>
+      <div class="cov">${bars}</div>
+      <div class="tn2" data-notr>${esc(x.name)}</div>
+      <div class="tm2">${x.t} · ${x.dev==="cuda"?T("显卡"):T("CPU")} · <span data-notr>${x.d}</span></div>
+      <div class="rowb"><span class="mono" data-notr style="font-size:12px;color:var(--text3)">${x.cot}</span>${st}
+        <span class="mono" style="font-size:12px;color:var(--text3);margin-left:auto">${T("种子")} <span data-notr>${x.seed??"—"}</span></span></div>
+    </button>`}).join("");
+  $("libGrid").querySelectorAll("[data-star]").forEach(b=>b.onclick=e=>{
+    e.stopPropagation(); const it=S.lib.find(x=>x.id===b.dataset.star); it.star=!it.star; renderLib();
+  });
+  $("libGrid").querySelectorAll("[data-lib]").forEach(c=>c.onclick=()=>{
+    c.classList.toggle("sel"); const n=$("libGrid").querySelectorAll(".tcard.sel").length;
+    $("abN").textContent=n; $("btnAB").disabled=n<2;
+  });
+}
+$("btnAB").onclick=()=>toast(T("A/B 盲听对比：并排卡片 + 统一时间轴，各自的请求参数与乐谱都保留"),"ok");
+$("btnTrash").onclick=()=>toast(T("回收站当前 0 项，30 天后自动清除"));
+$("libSearch").oninput=()=>{
+  const q=$("libSearch").value.toLowerCase();
+  $("libGrid").querySelectorAll(".tcard").forEach(c=>{
+    c.style.display=c.textContent.toLowerCase().includes(q)?"":"none";
+  });
+};
+/* ================= 播放条 ================= */
+(function wave(){
+  const w=$("wave"); w.innerHTML=Array.from({length:64},(_,i)=>{
+    const h=Math.min([38,62,84,52,30,72,96,44,66,28][i%10]+(i%7===0?8:0)+(i%3)*6,100);
+    const lv=h>=85?" h":h>=65?" m":"";
+    return `<i class="${i<18?"f"+lv:""}" style="height:${h}%;flex:1"></i>`}).join("");
+})();
+function play(){
+  S.playing=!S.playing;
+  $("ppIcon").setAttribute("d",S.playing?"M3 2h4v12H3zM9 2h4v12H9z":"M4 2l10 6-10 6z");
+  $("ppBtn").setAttribute("aria-label",S.playing?T("暂停"):T("播放"));
+  if(S.playing)tickWave();
+}
+let wpos=18;
+function tickWave(){
+  if(!S.playing)return;
+  const f=$("wave").querySelectorAll("i"); wpos=(wpos+1)%f.length;
+  f.forEach((el,i)=>el.classList.toggle("f",i<=wpos));
+  setTimeout(tickWave,110);
+}
+$("ppBtn").onclick=play;
+document.querySelectorAll("[data-ab]").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("[data-ab]").forEach(x=>x.classList.toggle("on",x===b));
+  $("tName").textContent=b.dataset.ab==="a"?T("晚风穿过城市（完整规划）"):T("City Lights（英文流行）");
+  toast(T("已切到候选 {0} · 对比模式下曲目与时间轴各自独立",b.dataset.ab.toUpperCase()));
+});
+$("volR").oninput=e=>slider(e.target); $("volR").style.setProperty("--p","90%");
+/* ================= 弹层 / 快捷键 ================= */
+let lastFocus=null;
+function openKeys(){
+  lastFocus=document.activeElement; $("scrim").classList.add("open"); $("keysModal").classList.add("open");
+  $("keysModal").focus();
+}
+function closeLayers(){
+  $("scrim").classList.remove("open"); $("keysModal").classList.remove("open");
+  lastFocus&&lastFocus.focus();
+}
+$("btnKeys").onclick=openKeys; $("keysX").onclick=closeLayers; $("scrim").onclick=closeLayers;
+$("keysModal").addEventListener("keydown",e=>{
+  if(e.key!=="Tab")return;
+  const f=$("keysModal").querySelectorAll("button,[href],input,select,textarea,[tabindex]:not([tabindex='-1'])");
+  if(!f.length)return; const first=f[0],last=f[f.length-1];
+  if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+  else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
+});
+addEventListener("keydown",e=>{
+  const tag=(e.target.tagName||"").toLowerCase(), typing=["input","textarea","select"].includes(tag);
+  if(e.key==="Escape")closeLayers();
+  if(e.key==="?"&&!typing){e.preventDefault();openKeys()}
+  if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();$("btnGen").click()}
+  if(e.code==="Space"&&!typing){e.preventDefault();play()}
+  if(!typing&&/^[1-5]$/.test(e.key))go(VIEWS[+e.key-1]);
+  if(!typing&&!e.ctrlKey&&!e.metaKey&&e.key.toLowerCase()==="l"){e.preventDefault();toggleLang()}
+  if(!typing&&!e.ctrlKey&&!e.metaKey&&e.key.toLowerCase()==="t"){e.preventDefault();toggleTheme()}
+});
+/* ================= 模拟进度 ================= */
+setInterval(()=>{
+  const j=S.jobs.find(x=>x.st==="running"); if(!j)return;
+  const b=j.bars;
+  if(b.sem<100)b.sem=Math.min(100,b.sem+1);
+  else if(b.nar<100)b.nar=Math.min(100,b.nar+2);
+  else if(b.dec<100)b.dec=Math.min(100,b.dec+4);
+  else{
+    S.jobs=S.jobs.map(x=>x.id===j.id?{...x,st:"done",dur:44.6,secs:512,art:true}:x);
+    const nx=S.jobs.find(x=>x.st==="queued");
+    if(nx){nx.st="running";nx.bars={plan:0,sem:0,nar:0,dec:0};nx.elapsed=0;nx.eta=512;nx.rate="—";nx.tokens=0}
+    toast(T("生成完成 · truncated=false，歌曲完整"),"ok");
+  }
+  j.elapsed=(j.elapsed||0)+3; j.eta=Math.max(0,(j.eta||0)-3); j.tokens=Math.min(9000,(j.tokens||0)+56);
+  if(j.st==="running")renderQueue();
+  updCost();
+},3000);
+/* ================= 启动 ================= */
+window.rerender=()=>{setModel(S.loaded?"on":"off");renderLyrics();lint();syncStyle();renderQueue();renderAbc();renderBatch();renderLib();updCost()};
+go(location.hash.replace("#/","")||"studio");
+applyLang();
+</script>
+</body>
+</html>
