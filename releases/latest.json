@@ -1,10 +1,10 @@
 {
-  "version": "0.3.1",
+  "version": "0.3.2",
   "channel": "stable",
-  "url": "https://gitee.com/isxiaobaia/yue2-studio/raw/main/releases/yue2-code-0.3.1.zip",
-  "sha256": "624c5c2d3a2535a1e050b202efd0e6f8a0bf78f5f2700987313b1eb848e23529",
-  "size": 375463,
-  "changelog": "0.3.1：修复歌词接口 500（_read_json 签名冲突）；含仓库全部最新代码。更新后浏览器标题显示 v0.3.1。",
+  "url": "https://gitee.com/isxiaobaia/yue2-studio/raw/main/releases/yue2-code-0.3.2.zip",
+  "sha256": "6090d9133a110ba79314248c9ab1f8870b65826bf66ef5f1759deefa7464b282",
+  "size": 375943,
+  "changelog": "0.3.2：更新机制安全加固（下载来源校验、强制 sha256 与大小校验、端口固定）；更新后标题显示 v0.3.2。",
   "published_at": "2026-11-14",
   "min_version": "0.1.0"
 }
