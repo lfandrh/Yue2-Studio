@@ -28,10 +28,15 @@
 | ![乐谱工作台](screenshots/03-score.png) | ![教程](screenshots/04-guide.png) |
 | 音块图改谱，逐音符校验后再重渲染 | 从零到一首歌的完整链路 |
 
-| 系统与模型 | 软件更新 |
+| 歌词 / 整页播放 | 系统与模型 |
 |---|---|
-| ![系统](screenshots/05-system.png) | ![软件更新](screenshots/06-update.png) |
-| 模型状态、doctor 自检、生成加速开关 | 检查更新、下载与一键安装 |
+| ![歌词](screenshots/07-lyrics.png) | ![系统](screenshots/05-system.png) |
+| 黑胶 / 歌词 / 卡拉OK / 环形四种形态 | 模型状态、doctor 自检、生成加速开关 |
+
+| 软件更新 |
+|---|
+| ![软件更新](screenshots/06-update.png) |
+| 检查更新、下载与一键安装，失败自动回滚 |
 
 > 截图来自本机 1600×1000 下的实际运行界面（Windows，Light 主题）。
 

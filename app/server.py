@@ -2735,13 +2735,6 @@ def retry_lyrics(job_id: str) -> dict:
 
 
 # ------------------------------------------------------------------- update
-def _read_json(path: Path, default):
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return default
-
-
 def _version_tuple(value: str) -> tuple:
     parts = []
     for chunk in str(value or "").split("."):
@@ -2762,8 +2755,8 @@ def current_version() -> dict:
     now = time.time()
     if VERSION_CACHE["data"] and now - VERSION_CACHE["at"] < 30:
         return VERSION_CACHE["data"]
-    info = _read_json(ROOT / "version.json", {})
-    config = _read_json(ROOT / "update.json", {})
+    info = _read_json(ROOT / "version.json") or {}
+    config = _read_json(ROOT / "update.json") or {}
     result = {
         "version": str(info.get("version") or "dev"),
         "commit": str(info.get("commit") or ""),
@@ -2881,7 +2874,7 @@ def update_apply(payload: dict | None = None) -> dict:
 
 @app.get("/api/system/update/status")
 def update_status() -> dict:
-    data = _read_json(UPDATE_DIR / "status.json", {})
+    data = _read_json(UPDATE_DIR / "status.json") or {}
     with UPDATE_LOCK:
         if not data or UPDATE_STATE["at"] > data.get("at", 0):
             return {"phase": UPDATE_STATE["phase"], "detail": UPDATE_STATE["detail"],
