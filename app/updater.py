@@ -306,6 +306,10 @@ def run(zip_path: Path, port: int, timeout: float) -> int:
                  detail="正在探活")
     if wait_health(port, timeout):
         log(f"更新成功，耗时 {time.time() - started:.1f}s")
+        try:
+            zip_path.unlink(missing_ok=True)
+        except OSError as exc:
+            log(f"清理安装包失败：{exc}")
         write_status(phase="done", ok=True, version=read_version(),
                      detail=f"已更新到 {read_version()}，耗时 {time.time() - started:.1f}s")
         return 0

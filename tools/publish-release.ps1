@@ -51,6 +51,13 @@ Get-ChildItem -LiteralPath (Join-Path $stage "app") -Recurse -Directory -Force -
     Where-Object { $_.Name -eq "__pycache__" } |
     ForEach-Object { [System.IO.Directory]::Delete($_.FullName, $true) }
 
+# 本地更新托管/测试残留不进发布包
+$staleUpdate = Join-Path $stage "app\static\update"
+if (Test-Path -LiteralPath $staleUpdate) {
+    [System.IO.Directory]::Delete($staleUpdate, $true)
+    Write-Ok "已排除 app\static\update"
+}
+
 # ---------------------------------------------------------------- 打 zip
 $zipName = "yue2-code-$version.zip"
 $zipPath = Join-Path $Out $zipName

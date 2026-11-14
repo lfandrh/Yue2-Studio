@@ -301,6 +301,8 @@ UPDATE_LOCK = threading.Lock()
 UPDATE_STATE = {"phase": "idle", "detail": "", "at": 0.0}
 UPDATE_TIMEOUT = 180.0
 VERSION_CACHE = {"at": 0.0, "data": None}
+UPDATE_PENDING = {}          # 最近一次 check 的下载信息，download 必须与之一致
+DOWNLOAD_LOCK = threading.Lock()
 
 
 # ------------------------------------------------------------------- job models
@@ -2750,10 +2752,10 @@ def _version_tuple(value: str) -> tuple:
     return tuple(parts[:3])
 
 
-def current_version() -> dict:
-    """版本身份 + 更新源配置。带 30s 缓存，供探活与界面共用。"""
+def current_version(refresh: bool = False) -> dict:
+    """版本身份 + 更新源配置。默认带 30s 缓存；检查更新时强制读盘。"""
     now = time.time()
-    if VERSION_CACHE["data"] and now - VERSION_CACHE["at"] < 30:
+    if not refresh and VERSION_CACHE["data"] and now - VERSION_CACHE["at"] < 30:
         return VERSION_CACHE["data"]
     info = _read_json(ROOT / "version.json") or {}
     config = _read_json(ROOT / "update.json") or {}
@@ -2777,7 +2779,7 @@ def system_version() -> dict:
 
 @app.post("/api/system/update/check")
 def update_check() -> dict:
-    info = current_version()
+    info = current_version(refresh=True)
     url = info["update_url"]
     if not url:
         raise HTTPException(400, "没有配置更新源（update.json 的 update_url）")
@@ -2794,13 +2796,25 @@ def update_check() -> dict:
     has_update = _version_tuple(latest) > _version_tuple(current)
     min_version = str(manifest.get("min_version") or "")
     blocked = bool(min_version) and _version_tuple(current) < _version_tuple(min_version)
+    pkg_url = str(manifest.get("url") or "")
+    pkg_sha = str(manifest.get("sha256") or "").lower()
+    if not pkg_url:
+        raise HTTPException(502, "更新清单缺少下载地址")
+    if not pkg_sha:
+        raise HTTPException(502, "更新清单缺少 sha256，拒绝下载")
+    try:
+        pkg_size = int(manifest.get("size") or 0)
+    except (TypeError, ValueError):
+        pkg_size = 0
+    global UPDATE_PENDING
+    UPDATE_PENDING = {"url": pkg_url, "sha256": pkg_sha, "size": pkg_size, "version": latest}
     return {
         "current": current,
         "latest": latest,
         "has_update": has_update,
-        "url": str(manifest.get("url") or ""),
-        "sha256": str(manifest.get("sha256") or ""),
-        "size": manifest.get("size") or 0,
+        "url": pkg_url,
+        "sha256": pkg_sha,
+        "size": pkg_size,
         "changelog": str(manifest.get("changelog") or ""),
         "published_at": str(manifest.get("published_at") or ""),
         "min_version": min_version,
@@ -2814,33 +2828,47 @@ def update_check() -> dict:
 def update_download(payload: dict) -> dict:
     url = str(payload.get("url") or "")
     sha256 = str(payload.get("sha256") or "").lower()
-    if not url:
-        raise HTTPException(400, "缺少下载地址")
-    with UPDATE_LOCK:
-        if UPDATE_STATE["phase"] not in ("idle", "downloaded"):
-            raise HTTPException(409, f"更新正在进行：{UPDATE_STATE['phase']}")
-        UPDATE_STATE.update(phase="downloading", detail="正在下载更新包", at=time.time())
-    UPDATE_DIR.mkdir(parents=True, exist_ok=True)
-    target = UPDATE_DIR / "update.zip"
-    try:
-        request = urllib.request.Request(url, headers={"User-Agent": "YuE2-Updater/1.0"})
-        with urllib.request.urlopen(request, timeout=UPDATE_TIMEOUT) as response, \
-                target.open("wb") as out:
-            shutil.copyfileobj(response, out, length=256 * 1024)
-    except Exception as exc:  # noqa: BLE001
-        target.unlink(missing_ok=True)
+    pending = dict(UPDATE_PENDING)
+    if not pending:
+        raise HTTPException(400, "请先检查更新")
+    # 只允许下载服务端刚检查出的那个包，避免客户端把下载地址换成任意 URL
+    if url != pending.get("url") or sha256 != pending.get("sha256"):
+        raise HTTPException(400, "下载信息与检查结果不一致，请重新检查更新")
+    if not sha256:
+        raise HTTPException(400, "缺少 sha256")
+    with DOWNLOAD_LOCK:
         with UPDATE_LOCK:
-            UPDATE_STATE.update(phase="idle", detail=f"下载失败：{exc}", at=time.time())
-        raise HTTPException(502, f"下载失败：{exc}")
-    digest = hashlib.sha256(target.read_bytes()).hexdigest()
-    if sha256 and digest != sha256:
-        target.unlink(missing_ok=True)
+            if UPDATE_STATE["phase"] not in ("idle", "downloaded"):
+                raise HTTPException(409, f"更新正在进行：{UPDATE_STATE['phase']}")
+            UPDATE_STATE.update(phase="downloading", detail="正在下载更新包", at=time.time())
+        UPDATE_DIR.mkdir(parents=True, exist_ok=True)
+        target = UPDATE_DIR / "update.zip"
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "YuE2-Updater/1.0"})
+            with urllib.request.urlopen(request, timeout=UPDATE_TIMEOUT) as response, \
+                    target.open("wb") as out:
+                shutil.copyfileobj(response, out, length=256 * 1024)
+        except Exception as exc:  # noqa: BLE001
+            target.unlink(missing_ok=True)
+            with UPDATE_LOCK:
+                UPDATE_STATE.update(phase="idle", detail=f"下载失败：{exc}", at=time.time())
+            raise HTTPException(502, f"下载失败：{exc}")
+        digest = hashlib.sha256(target.read_bytes()).hexdigest()
+        if digest != sha256:
+            target.unlink(missing_ok=True)
+            with UPDATE_LOCK:
+                UPDATE_STATE.update(phase="idle", detail="校验失败，已删除更新包", at=time.time())
+            raise HTTPException(400, f"校验和不匹配：{digest}")
+        expected = int(pending.get("size") or 0)
+        actual = target.stat().st_size
+        if expected and actual != expected:
+            target.unlink(missing_ok=True)
+            with UPDATE_LOCK:
+                UPDATE_STATE.update(phase="idle", detail="文件大小与清单不一致", at=time.time())
+            raise HTTPException(400, f"文件大小与清单不一致：{actual} != {expected}")
         with UPDATE_LOCK:
-            UPDATE_STATE.update(phase="idle", detail="校验失败，已删除更新包", at=time.time())
-        raise HTTPException(400, f"校验和不匹配：{digest}")
-    with UPDATE_LOCK:
-        UPDATE_STATE.update(phase="downloaded", detail="下载并校验完成", at=time.time())
-    return {"path": str(target), "sha256": digest, "size": target.stat().st_size}
+            UPDATE_STATE.update(phase="downloaded", detail="下载并校验完成", at=time.time())
+    return {"path": str(target), "sha256": digest, "size": actual}
 
 
 @app.post("/api/system/update/apply")
@@ -2851,7 +2879,7 @@ def update_apply(payload: dict | None = None) -> dict:
         raise HTTPException(400, "还没有下载更新包")
     if MODEL_BUSY or QUEUE.qsize() > 0:
         raise HTTPException(409, "有任务正在生成，等它完成后再更新")
-    port = int(payload.get("port") or SERVER_PORT)
+    port = SERVER_PORT  # 固定用服务自身端口，忽略客户端传值
     updater = ROOT / "app" / "updater.py"
     if not updater.is_file():
         raise HTTPException(400, "更新程序缺失：app/updater.py")
