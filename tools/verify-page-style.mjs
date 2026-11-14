@@ -1,13 +1,13 @@
 import fs from "node:fs";
 
-/* 创作页样式验收（对 http://127.0.0.1:8083 做 CDP 检查）。
+/* 创作页样式验收（对 http://127.0.0.1:9090 做 CDP 检查）。
    先起一个独立 headless Chrome（端口 9458，不碰用户已开标签）：
      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --headless=new \
        --remote-debugging-port=9458 --user-data-dir=<临时目录> --window-size=1426,900 --no-first-run about:blank
    再运行：node tools/verify-page-style.mjs        截图落在 tools/evidence/ */
 const OUT = "tools/evidence";
 fs.mkdirSync(OUT, {recursive: true});
-const BASE = process.env.VERIFY_BASE || "http://127.0.0.1:8083";
+const BASE = process.env.VERIFY_BASE || "http://127.0.0.1:9090";
 const PORT = Number(process.env.VERIFY_CDP || 9458);
 
 const v = await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json();
@@ -55,7 +55,7 @@ for (let i = 0; i < 60; i++) {
 await sleep(700);
 
 /* 首次引导会压暗整页，先标记已读再刷新，验收和截图都基于干净页面 */
-await ev(`localStorage.setItem("yue2.tour", "seen")`);
+await ev(`localStorage.setItem("yue2.v1.tour", "seen"); localStorage.removeItem("yue2.v1.guide"); localStorage.removeItem("yue2.guide"); true`);
 await send("Page.reload", {}, sessionId);
 for (let i = 0; i < 60; i++) {
   if (await ev(`document.readyState === "complete" && !!document.getElementById("btnKeys")`)) break;

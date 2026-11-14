@@ -1,6 +1,6 @@
 import fs from "node:fs";
 
-/* 主页谱面与乐谱工作台共用 + 「用这份谱面生成」开关的验收脚本（20 项，对 http://127.0.0.1:8083 做 CDP 检查）。
+/* 主页谱面与乐谱工作台共用 + 「用这份谱面生成」开关的验收脚本（20 项，对 http://127.0.0.1:9090 做 CDP 检查）。
    先起一个独立 headless Chrome（独立 profile，不碰用户已开标签）：
      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --headless=new \
        --remote-debugging-port=9456 --user-data-dir=<临时目录> --window-size=1426,900 --no-first-run about:blank
@@ -8,7 +8,7 @@ import fs from "node:fs";
    只读后端：创建任务的请求被页内 fetch 桩拦下，不会真的排队。 */
 const OUT = "tools/evidence";
 fs.mkdirSync(OUT, {recursive: true});
-const BASE = process.env.VERIFY_BASE || "http://127.0.0.1:8083";
+const BASE = process.env.VERIFY_BASE || "http://127.0.0.1:9090";
 const PORT = Number(process.env.VERIFY_CDP || 9456);
 
 const v = await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json();
@@ -33,7 +33,17 @@ const {targetInfos} = await send("Target.getTargets");
 const page = targetInfos.find((t) => t.type === "page");
 const {sessionId} = await send("Target.attachToTarget", {targetId: page.targetId, flatten: true});
 const ev = async (expr) => (await send("Runtime.evaluate", {expression: expr, awaitPromise: true, returnByValue: true}, sessionId)).result.value;
+const setLang = (lang) => ev(`import("/static/js/i18n.js").then(m => m.applyLang(${JSON.stringify(lang)}))`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/* 生成按钮在成功排队后有 1.5s 冷却；冷却没结束就 click 会被浏览器吞掉，这里等它恢复再点。 */
+const waitGenEnabled = async (ms = 12000) => {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) {
+    if (!(await ev(`document.getElementById("btnGen").disabled`))) return true;
+    await sleep(150);
+  }
+  throw new Error("生成按钮在冷却后仍未恢复可用");
+};
 const json = async (expr) => JSON.parse(await ev(expr));
 const waitFor = async (expr, timeout = 8000) => {
   const t0 = Date.now();
@@ -53,12 +63,36 @@ const check = (name, pass, detail) => {
   results.push({name, pass, detail});
   console.log(`${pass ? "PASS" : "FAIL"} ${name} ${detail === undefined ? "" : JSON.stringify(detail)}`);
 };
-const go = (view) => ev(`document.querySelector('[data-view="${view}"]').click()`);/* 弹框确认（结构检查/提醒级）一律点主按钮放行，只为拿到请求体 */
-const acceptDialog = async () => {
-  if (await ev(`!!document.querySelector(".modal.open [data-ok]")`)) {
-    await ev(`document.querySelector(".modal.open [data-ok]").click()`);
-    await sleep(250);
+/* 离开乐谱工作台时若弹出「谱面改动还没写回」，选「不保存」放行，免得堵住后面的步骤。 */
+const settleLeavePrompt = async (ms = 3000) => {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) {
+    if (await ev(`!!document.querySelector(".modal.open [data-x]")`)) {
+      await ev(`document.querySelector(".modal.open [data-x]").click()`);
+      await sleep(250);
+      return true;
+    }
+    await sleep(120);
   }
+  return false;
+};
+const go = async (view) => {
+  const fromScore = !(await ev(`document.getElementById("v-score").hidden`));
+  await ev(`document.querySelector('[data-view="${view}"]').click()`);
+  if (fromScore && view !== "score") await settleLeavePrompt();
+};/* 弹框确认（结构检查/提醒级）一律点主按钮放行，只为拿到请求体 */
+/* 弹框是异步弹出的：只检查一次会赶在它出现之前放过，生成卡在 await 上。 */
+const acceptDialog = async (ms = 6000) => {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) {
+    if (await ev(`!!document.querySelector(".modal.open [data-ok]")`)) {
+      await ev(`document.querySelector(".modal.open [data-ok]").click()`);
+      await sleep(250);
+      return true;
+    }
+    await sleep(150);
+  }
+  return false;
 };
 const setText = (sel, value) => ev(`(()=>{const el=document.querySelector(${JSON.stringify(sel)});
   el.value=${JSON.stringify(value)};el.dispatchEvent(new Event("input",{bubbles:true}));return true})()`);
@@ -82,7 +116,7 @@ await send("Page.navigate", {url: BASE + "/"}, sessionId);
 if (!(await waitFor(`!!document.getElementById("btnKeys")`, 15000)) && !(await waitFor(`!!document.getElementById("btnKeys")`, 8000))) {
   throw new Error("页面没起来：" + (await ev(`location.href`)));
 }
-await ev(`localStorage.clear();localStorage.setItem("yue2.guide","done");localStorage.setItem("yue2.tour","done")`);
+await ev(`localStorage.clear();localStorage.setItem("yue2.v1.guide","done");localStorage.setItem("yue2.v1.tour","done")`);
 await send("Page.reload", {}, sessionId);
 if (!(await waitFor(booted, 15000))) throw new Error("重载后页面没起来：" + (await ev(`location.href`)));
 await dismiss();
@@ -185,12 +219,14 @@ await ev(`(()=>{window.__posts=[];const real=window.fetch.bind(window);
 await setText("#fStyle", "city pop, 100 BPM, electric piano");
 await setText("#fLyrics", "[Verse]\n晚风轻轻吹过窗前\n把今天的路上");
 await sleep(300);
+await waitGenEnabled();
 await ev(`document.getElementById("btnGen").click()`);
 await sleep(700);
 await acceptDialog();
 await sleep(700);
 await go("studio");
 await sleep(300);
+await waitGenEnabled();
 await ev(`document.getElementById("btnGen").click()`);
 await sleep(700);
 await acceptDialog();
@@ -205,6 +241,7 @@ await ev(`(()=>{const c=document.getElementById("studioUseScore");
   if(!c.disabled&&c.getAttribute("aria-pressed")!=="true")c.click();return true})()`);
 await sleep(300);
 const beforeAbc = await ev(`document.getElementById("studioScore").value`);
+await waitGenEnabled();
 await ev(`document.getElementById("btnGen").click()`);
 await sleep(700);
 await acceptDialog();
@@ -323,7 +360,7 @@ const afterReload = await json(`JSON.stringify({sel:document.getElementById("stu
 check("探针任务消失后自动跟到最新谱（刷新不卡住）", afterReload.mockGone === true && afterReload.sel !== "", afterReload);
 
 /* ---------- 8. 双语：新面板文案在 EN 下不夹中文 ---------- */
-await ev(`document.querySelector('button[data-lang="en"]').click()`);
+await setLang("en");
 await sleep(700);
 const en = await json(`(()=>{
   const card=document.getElementById("studioScoreSource").closest(".card");
@@ -340,7 +377,7 @@ check("EN：开关文案与悬停说明已翻译", en.chip === "Use This Score" 
 check("EN：面板标题/说明/占位符无残留中文",
   cjk.test(en.bits) === false && cjk.test(en.placeholder) === false && cjk.test(en.note) === false,
   {bits: en.bits.slice(0, 120), placeholder: en.placeholder.slice(0, 40), note: en.note.slice(0, 60)});
-await ev(`document.querySelector('button[data-lang="zh"]').click()`);
+await setLang("zh");
 await sleep(600);
 
 /* ---------- 9. 分辨率：新增开关行不产生横向溢出 ---------- */

@@ -1,13 +1,13 @@
 import fs from "node:fs";
 
-/* 侧栏响应式验收（对 http://127.0.0.1:8083 做 CDP 检查）。
+/* 侧栏响应式验收（对 http://127.0.0.1:9090 做 CDP 检查）。
    先起一个独立 headless Chrome（端口 9457，不碰用户已开标签）：
      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --headless=new \
        --remote-debugging-port=9457 --user-data-dir=<临时目录> --window-size=1426,900 --no-first-run about:blank
    再运行：node tools/verify-nav-rail.mjs        截图落在 tools/evidence/ */
 const OUT = "tools/evidence";
 fs.mkdirSync(OUT, {recursive: true});
-const BASE = process.env.VERIFY_BASE || "http://127.0.0.1:8083";
+const BASE = process.env.VERIFY_BASE || "http://127.0.0.1:9090";
 const PORT = Number(process.env.VERIFY_CDP || 9457);
 
 const v = await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json();
@@ -28,6 +28,7 @@ const {targetInfos} = await send("Target.getTargets");
 const page = targetInfos.find((t) => t.type === "page");
 const {sessionId} = await send("Target.attachToTarget", {targetId: page.targetId, flatten: true});
 const ev = async (expr) => (await send("Runtime.evaluate", {expression: expr, awaitPromise: true, returnByValue: true}, sessionId)).result.value;
+const setLang = (lang) => ev(`import("/static/js/i18n.js").then(m => m.applyLang(${JSON.stringify(lang)}))`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const waitFor = async (expr, timeout = 10000) => {
   const t0 = Date.now();
@@ -53,7 +54,7 @@ if (!(await waitFor(`document.readyState === "complete" && !!document.querySelec
 }
 await sleep(600);
 // 关掉首次巡览遮罩，截图与量测只针对导航本身
-await ev(`(() => { localStorage.setItem("yue2.tour", "seen"); localStorage.setItem("yue2.guide", "off"); return true; })()`);
+await ev(`(() => { localStorage.setItem("yue2.v1.tour", "seen"); localStorage.setItem("yue2.v1.guide", "off"); return true; })()`);
 await send("Page.reload", {}, sessionId);
 if (!(await waitFor(`document.readyState === "complete" && document.getElementById("tour").hidden`))) {
   throw new Error("tour overlay still open");
@@ -107,7 +108,7 @@ for (const width of [1280, 1180, 1000, 900, 821, 820, 672, 400]) {
 
 // 英文界面：图标栏的 aria-label / title 必须跟着翻译，不能残留中文
 await send("Emulation.setDeviceMetricsOverride", {width: 1000, height: 800, deviceScaleFactor: 1, mobile: false}, sessionId);
-await ev(`(() => { document.getElementById("btnLang").click(); return true; })()`);
+await setLang("en");
 await sleep(500);
 const en = await ev(`[...document.querySelectorAll(".nav")].map((n) => ({view: n.dataset.view, aria: n.getAttribute("aria-label"), title: n.getAttribute("title")}))`);
 const expectEn = "Create,Score workbench,Library,Tutorial,System";

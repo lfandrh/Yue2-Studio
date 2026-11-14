@@ -9,6 +9,7 @@ import {icon, q, qa, esc, notr, fmtClock, fmtStamp, fmtDate, debounce, toast,
 import {state, subscribe, bootstrap, loadModel, loadJobs, loadJob, loadDoctor, loadModelOn,
         unloadModel, createJob, cancelJob, updateJob, deleteJob, renameWork, audioUrl,
         artifactUrl, loadSettings, saveSettings, resetSettings,
+        loadVersion, checkUpdate, downloadUpdate, applyUpdate, loadUpdateStatus,
         get, post, put, downloadFile, ApiError, pollCountdown} from "./store.js";
 import {displayName, versionLabel, workName, subtitleName} from "./naming.js";
 import {storageKey, readRaw, readJson, writeJson, removeRaw, readText, writeText, readNumber,
@@ -2171,14 +2172,18 @@ function renderGuideView() {
 /* ------------------------------------------------------------------ 界面巡览 */
 const TOUR_STEPS = [
   {view: "studio", target: ".rail", title: "五个工作区", body: "创作、乐谱、曲库、教程、系统。数字键 1–5 也能直接切换。"},
+  {view: "studio", target: ".topbar", title: "先认一下顶栏", body: "左边是模型状态与设备切换（CPU / GPU），右边是语言、主题、快捷键与加载/卸载模型。L 切语言、T 切主题、? 看快捷键。"},
   {view: "studio", target: "#fPreset", title: "先用一个范例起步", body: "下拉挑一套风格，点「载入范例」会把风格和歌词一起填好；之后随便改。"},
   {view: "studio", target: "#fStyle", title: "风格写在这里", body: "语言、流派、乐器、BPM 用英文逗号分隔。上面的标签只是帮着加词，原文可以直接改。"},
   {view: "studio", target: "#fLyrics", title: "歌词按段落写", body: "每行 7–13 个字，用 [Verse] / [Chorus] 分段。「检查结构」会提示过长或空段落。"},
   {view: "studio", target: ".modes", title: "规划模式", body: "「旋律 + 和弦」会先产出可读可改的乐谱；「不规划」最快，但没有谱可以改。"},
   {view: "studio", target: "#dock", title: "生成与进度", body: "「生成歌曲」一次做到音频；「只出谱」约 1 分钟先看谱。开始后页面顶部出现生成台：四段阶段轴、整体百分比和剩余时间都能看到，也能收起。"},
+  {view: "score", target: ".scoreBar", title: "乐谱工作台", body: "选一条带谱的任务：音块图与文本谱是同一份谱。改完先「检查谱面」，通过后再「改谱重渲染」。"},
+  {view: "score", target: ".toolrow", title: "改谱工具", body: "「对比原谱」看逐处改动，「去掉和弦」做翻唱片，「转纯音乐谱」去人声；改错了可以「恢复原谱」。"},
   {view: "library", target: "#v-library .vhead", title: "曲库与示例", body: "每条任务都能试听、下载、复制参数；选两条进入 A/B 盲听。内置示例曲「示例曲 · 晚风」就在这里。"},
   {view: "library", target: ".trans", title: "底部播放器", body: "空格播放/暂停，点波形跳转，A/B 切换也在这条上。播放时底条中央会常驻三句歌词。"},
   {view: "library", target: "#lyrTg", title: "整页播放页", body: "点右下角「歌词」整页展开：黑胶、歌词、卡拉OK、环形四种形态，1–4 切换、Esc 收起；刷新后曲目和进度也会自动恢复。"},
+  {view: "system", target: "#sysModel", title: "系统与模型", body: "这里看模型状态、跑 doctor 自检、开生成加速，也能看到解码器与存储约束。模型常驻子进程，卸载即释放显存。"},
 ];
 
 let tourIndex = -1;
@@ -4659,6 +4664,7 @@ function renderSystem() {
 
   renderAccel();
   renderDoctor();
+  renderUpdate();
 }
 
 /* 后端的 capability.reason 是按中文界面拼接的动态串（含实时算力数值），词典整句命中不了；
@@ -4735,6 +4741,81 @@ function renderAccel() {
       renderSystem();
     });
   });
+}
+
+function renderUpdateStatus(status) {
+  if (!status) return "";
+  const phase = status.phase || "";
+  if (phase === "done" && status.ok) {
+    return `<div class="note ok">${esc(T("更新完成"))} · ${esc(T("已更新到 {0}", status.version || ""))}</div>`;
+  }
+  if (phase === "done" && status.rolled_back) {
+    return `<div class="note bad">${esc(T("新版本无法启动，已自动回滚到更新前版本。"))}</div>`;
+  }
+  if (phase === "failed") {
+    return `<div class="note bad">${esc(T("更新失败"))}${status.error ? "：" + esc(status.error) : ""}</div>`;
+  }
+  const labels = {stopping: "正在停止服务", backup: "正在备份", apply: "正在写入新代码",
+                  restart: "正在重启服务", health: "正在探活", applying: "正在安装更新"};
+  const label = labels[phase] || phase;
+  return `<div class="note">${esc(T(label))}…</div>`;
+}
+
+function renderUpdate() {
+  const box = $("updBody");
+  if (!box) return;
+  const u = state.update;
+  const dot = $("updDot");
+  if (dot) dot.hidden = !u.has_update;
+  const versionLine = `<div class="sub" style="margin:0">${esc(T("当前版本"))} ` +
+    `<span class="mono" data-notr>${esc(u.current || "—")}</span>` +
+    (u.commit ? ` · <span class="mono" data-notr>${esc(String(u.commit).slice(0, 7))}</span>` : "") +
+    ` · ${esc(u.channel || "stable")}</div>`;
+  const banner = (u.has_update && !u.applying)
+    ? `<div class="note" style="margin-bottom:var(--sp3)"><b>${esc(T("有新版本可用：{0}", u.latest))}</b></div>`
+    : "";
+  let body = "";
+  if (u.checking) {
+    body = `<div class="hint">${esc(T("正在检查更新…"))}</div>`;
+  } else if (u.applying) {
+    body = `<div class="note">${esc(T("正在安装更新，服务将自动重启，请稍候…"))}</div>`;
+  } else if (u.downloading) {
+    body = `<div class="note">${esc(T("正在下载更新包…"))}</div>`;
+  } else if (u.status && u.status.phase && u.status.phase !== "idle") {
+    body = renderUpdateStatus(u.status);
+  } else if (u.error) {
+    body = `<div class="note bad">${esc(T("更新出错：{0}", u.error))}</div>`;
+  } else if (u.blocked) {
+    body = `<div class="note bad"><b>${esc(T("无法直接升级"))}</b><br>` +
+      `${esc(u.reason || T("当前版本过低，请下载完整整合包覆盖安装"))}</div>`;
+  } else if (!u.checked) {
+    body = `<div class="hint">${esc(T("点「检查更新」查看是否有新版本。只更新代码，不动模型、权重与依赖环境。"))}</div>`;
+  } else if (u.has_update) {
+    body = (u.changelog ? `<div class="hint" style="margin-bottom:var(--sp3)">${esc(u.changelog)}</div>` : "") +
+      `<div class="inline" style="flex-wrap:wrap">` +
+      (u.downloaded
+        ? `<button class="btn primary" id="btnApplyUpdate" type="button">${esc(T("立即安装并重启"))}</button>`
+        : `<button class="btn primary" id="btnDownloadUpdate" type="button">${esc(T("下载更新"))}</button>`) +
+      `<button class="btn ghost" id="btnRecheckUpdate" type="button">${esc(T("重新检查"))}</button>` +
+      `</div>`;
+  } else {
+    body = `<div class="hint">${esc(T("已是最新版本。"))}</div>`;
+  }
+  box.innerHTML = versionLine + banner + body;
+  const dl = $("btnDownloadUpdate");
+  if (dl) dl.addEventListener("click", () => { downloadUpdate(); });
+  const ap = $("btnApplyUpdate");
+  if (ap) ap.addEventListener("click", async () => {
+    if (!await confirmDialog({
+      title: T("安装更新"),
+      body: esc(T("安装会重启服务，期间正在生成的任务会被中断。确定继续吗？")),
+      ok: T("安装"), cancel: T("取消"), danger: true,
+    })) return;
+    const port = Number(window.location.port) || 9090;
+    await applyUpdate(port);
+  });
+  const rc = $("btnRecheckUpdate");
+  if (rc) rc.addEventListener("click", () => { checkUpdate(); });
 }
 
 function renderDoctor() {
@@ -5682,6 +5763,17 @@ function bind() {
       renderSystem();
     }
   });
+  $("btnCheckUpdate").addEventListener("click", async () => {
+    $("btnCheckUpdate").disabled = true;
+    try {
+      await checkUpdate();
+    } catch (exc) {
+      toast(message(exc), "bad");
+    } finally {
+      $("btnCheckUpdate").disabled = false;
+      renderSystem();
+    }
+  });
   $("btnAccelReset").addEventListener("click", async () => {
     if (!await confirmDialog({
       title: T("恢复默认设置"),
@@ -5923,6 +6015,7 @@ subscribe((what) => {
           outageToast();
           outageToast = null;
         }
+        if (state.update.applying) loadUpdateStatus().catch(() => {});
       } else if (sawConnected && !outageToast) {
         outageToast = toast(T("与后端连接中断，正在自动重连；这期间任务进度可能不更新"), "bad", 0);
       }
@@ -5966,6 +6059,7 @@ subscribe((what) => {
       `<option value="${esc(preset.id)}">${esc(T(preset.name))}</option>`).join("");
   }
   if (what === "doctor" && ui.view === "system") renderDoctor();
+  if (what === "update" && ui.view === "system") renderSystem();
   if (what === "lyrics") {
     const id = state.lyricsEvent?.job;
     if (state.lyricsEvent?.ok === false) {

@@ -17,6 +17,10 @@ export const state = {
   settings: null,             // GET /api/settings：{settings:{attention_ar,attention_nar}, capabilities:{...}}
   lyricsEvent: null,         // 最近一条 lyrics 事件（{job}），歌词就绪后前端重取
   error: "",
+  update: {checked: false, checking: false, current: "", latest: "", has_update: false,
+           changelog: "", size: 0, url: "", sha256: "", published_at: "", channel: "stable",
+           commit: "", downloading: false, downloaded: false, applying: false,
+           status: null, error: ""},
 };
 
 const listeners = new Set();
@@ -152,6 +156,64 @@ export async function loadDoctor(refresh = false) {
   state.doctor = await api("/api/system/doctor" + (refresh ? "?refresh=true" : ""));
   emit("doctor");
   return state.doctor;
+}
+
+/* ------------------------------------------------------------------ 更新 */
+export async function loadVersion() {
+  state.update = {...state.update, ...(await api("/api/system/version"))};
+  emit("update");
+  return state.update;
+}
+
+export async function checkUpdate() {
+  state.update = {...state.update, checking: true, error: ""};
+  emit("update");
+  try {
+    const data = await post("/api/system/update/check", {});
+    state.update = {...state.update, ...data, checking: false, checked: true,
+                    downloading: false, downloaded: false, applying: false, status: null};
+  } catch (exc) {
+    state.update = {...state.update, checking: false, checked: true,
+                    error: exc.message || "检查失败"};
+  }
+  emit("update");
+  return state.update;
+}
+
+export async function downloadUpdate() {
+  state.update = {...state.update, downloading: true, error: ""};
+  emit("update");
+  try {
+    await post("/api/system/update/download",
+               {url: state.update.url, sha256: state.update.sha256});
+    state.update = {...state.update, downloading: false, downloaded: true, status: null};
+  } catch (exc) {
+    state.update = {...state.update, downloading: false, error: exc.message || "下载失败"};
+  }
+  emit("update");
+  return state.update;
+}
+
+export async function applyUpdate(port) {
+  state.update = {...state.update, applying: true, error: ""};
+  emit("update");
+  try {
+    await post("/api/system/update/apply", {port});
+  } catch (exc) {
+    state.update = {...state.update, applying: false, error: exc.message || "更新失败"};
+    emit("update");
+  }
+  return state.update;
+}
+
+export async function loadUpdateStatus() {
+  try {
+    state.update = {...state.update, status: await api("/api/system/update/status")};
+  } catch (exc) {
+    return state.update;
+  }
+  emit("update");
+  return state.update;
 }
 
 /* ------------------------------------------------------------------ 模型 */
@@ -437,6 +499,7 @@ export async function bootstrap() {
     loadModel().catch(mark),
     loadJobs().catch(mark),
     loadSettings().catch(mark),
+    loadVersion().catch(mark),
   ];
   await Promise.all(tasks);
   connectEvents();

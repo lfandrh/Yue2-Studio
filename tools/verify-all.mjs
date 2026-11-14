@@ -3,8 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 /* 一键验收入口：独立脚本按顺序跑，单个失败不阻断其余脚本。
-   --standalone 只跑不依赖 8083/headless Chrome/真实模型的前置脚本。
-   CDP 脚本需要先按各脚本头注释启动 headless Chrome；需要 8083 的脚本也先起服务。
+   --standalone 只跑不依赖 9090/headless Chrome/真实模型的前置脚本。
+   CDP 脚本需要先按各脚本头注释启动 headless Chrome；需要 9090 的脚本也先起服务。
    用法：node tools/verify-all.mjs [--only verify-subtitle-ui.mjs,verify-naming.mjs] */
 const ROOT = path.resolve(import.meta.dirname, "..");
 const TOOLS = path.join(ROOT, "tools");
@@ -37,7 +37,7 @@ const start = Date.now();
 for (const name of scripts) {
   const file = path.join(TOOLS, name);
   const command = name.endsWith(".py")
-    ? [path.join(ROOT, "YuE", ".venv", "Scripts", "python.exe"), file]
+    ? [path.join(ROOT, "YuE", ".venv", "Scripts", "python.exe"), path.join(ROOT, "YuE", ".venv", "python.exe")].find(fs.existsSync) || path.join(ROOT, "YuE", ".venv", "Scripts", "python.exe")
     : [process.execPath, file];
   const run = spawn(command[0], command.slice(1), {
     cwd: ROOT,

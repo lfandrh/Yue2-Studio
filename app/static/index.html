@@ -93,7 +93,7 @@
     <button class="nav" data-view="system" type="button"
       title="系统" aria-label="系统" aria-keyshortcuts="5">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.08a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.08a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      <span class="lb">系统</span><kbd class="nkey" data-notr>5</kbd>
+      <span class="lb">系统</span><span class="upd-dot" id="updDot" hidden></span><kbd class="nkey" data-notr>5</kbd>
     </button>
     <div class="railfoot" id="railfoot">单任务队列</div>
   </nav>
@@ -596,7 +596,7 @@
       </div>
 
       <div class="lesson">
-        <div class="lh"><span class="ln">03</span><div><h2>试听与迭代</h2><p>生成只是开始，后面四件事最常用。</p></div></div>
+        <div class="lh"><span class="ln">03</span><div><h2>试听与迭代</h2><p>生成只是开始，下面几件事最常用。</p></div></div>
         <ul class="ticks">
           <li><b>试听与下载</b>：任务卡上直接试听；下载得到 FLAC 无损文件。</li>
           <li><b>收藏与 A/B</b>：曲库里选两条有音频的任务，切换 A/B 时播放位置不变。</li>
@@ -638,7 +638,37 @@
           <li>没有音色克隆：音色只能用风格词描述，不能上传参考音频。</li>
           <li>不支持局部修补：改一个音也要整曲重渲染。</li>
           <li>歌曲长度有上限，超出会截断，任务卡上会标「截断」。</li>
-          <li>模型权重是 CC BY-NC 4.0：非商业使用；分发前先看部署文档里的授权说明。</li>
+          <li>模型权重是 CC BY-NC 4.0：非商业使用；分发前先看 README 里的授权说明。</li>
+        </ul>
+      </div>
+      <div class="lesson">
+        <div class="lh"><span class="ln">07</span><div><h2>乐谱工作台</h2><p>读谱 → 改谱 → 校验 → 重新渲染。改错了整曲白跑，所以校验放在生成之前。</p></div></div>
+        <ul class="ticks">
+          <li><b>两种改法</b>：音块图点选拖动改音高与长短，文本谱直接改 ABC；两边是同一份谱。</li>
+          <li><b>先检查谱面</b>：改完点「检查谱面」，通过后再「改谱重渲染」，不拿坏谱去跑十分钟。</li>
+          <li><b>对比与恢复</b>：「对比原谱」看逐处改动；「恢复原谱」丢弃本地改动。</li>
+          <li><b>去和弦 / 转纯音乐</b>：做翻唱片用「去和弦」，要纯伴奏点「转纯音乐谱」。</li>
+          <li><b>快速调整</b>：右侧可整曲移调、改速度、删段落，改完同样要重新渲染。</li>
+        </ul>
+      </div>
+
+      <div class="lesson">
+        <div class="lh"><span class="ln">08</span><div><h2>歌曲管理与字幕</h2><p>每次生成都是一条带谱系的任务，派生任务挂在原任务上。</p></div></div>
+        <ul class="ticks">
+          <li><b>谱系与版本</b>：改谱重渲染、渲染成歌、重解码都会派生新任务并挂到原任务，详情里能看到版本号与源任务。</li>
+          <li><b>候选对比</b>：候选数量选 2–4，同词同风格、不同种子逐个跑，收藏后 A/B 盲听。</li>
+          <li><b>回收站</b>：删除只是把产物移进回收站，保留 30 天，误删能在 runs/_trash 里找回来。</li>
+          <li><b>字幕导出</b>：播放页展开「字幕」，可导出 SRT 或 LRC（行级 / 逐字），直接拖进剪辑软件。</li>
+        </ul>
+      </div>
+
+      <div class="lesson">
+        <div class="lh"><span class="ln">09</span><div><h2>启动与界面</h2><p>先让服务跑起来，再认识几个全局开关；部署细节看 README。</p></div></div>
+        <ul class="ticks">
+          <li><b>启动与停止</b>：双击 start.bat 起服务（默认端口 9090，可用 set YUE2_PORT=9091 改），stop.bat 停止并释放显存。</li>
+          <li><b>快捷键</b>：1–5 切换视图、Ctrl+回车 生成、空格 播放暂停、L 语言、T 主题、Esc 关弹层、? 看全部。</li>
+          <li><b>系统页</b>：跑 doctor 自检、看存储与解码器状态、开「生成加速」（只影响下一个任务）。</li>
+          <li><b>语言与主题</b>：中英文与深浅色各自记忆；风格描述与 [Verse] 段落标记固定按英文下发。</li>
         </ul>
       </div>
     </section>
@@ -672,6 +702,13 @@
           </div>
         </div>
         <aside>
+          <div class="card" style="margin-bottom:var(--sp4)">
+            <div class="inline" style="justify-content:space-between">
+              <h2><svg viewBox="0 0 24 24"><path d="M12 3v10m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>软件更新</h2>
+              <button class="btn sm primary" id="btnCheckUpdate" type="button">检查更新</button>
+            </div>
+            <div id="updBody" style="margin-top:var(--sp3)"></div>
+          </div>
           <div class="card" style="margin-bottom:var(--sp4)">
             <div class="inline" style="justify-content:space-between">
               <h2><svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>生成加速</h2>

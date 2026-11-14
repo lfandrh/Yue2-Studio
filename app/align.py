@@ -25,7 +25,6 @@ PARAFORMER_DIR = KIT / "models" / "paraformer-zh"
 PARAFORMER_ONNX = PARAFORMER_DIR / "model.int8.onnx"
 PARAFORMER_TOKENS = PARAFORMER_DIR / "tokens.txt"
 WHISPER_DIR = KIT / "models" / "faster-whisper-large-v3-turbo"
-SMARTSUB_CACHE = Path("D:/Software/SmartSub/cache/faster-whisper-models/hub")
 HF_HOME = Path(os.environ.get("HF_HOME") or Path.home() / ".cache" / "huggingface")
 SMARTSUB_DATA = Path(os.environ.get("APPDATA") or "") / "smartsub" / "models"
 
@@ -83,9 +82,7 @@ def whisper_dir() -> Path | None:
     if WHISPER_DIR.joinpath("model.bin").exists():
         return WHISPER_DIR
     roots = [
-        (SMARTSUB_CACHE, "models--*whisper*turbo*"),
         (HF_HOME / "hub", "models--*whisper*turbo*"),
-        (SMARTSUB_CACHE, "models--Systran--faster-whisper-*"),
         (HF_HOME / "hub", "models--Systran--faster-whisper-*"),
         (SMARTSUB_DATA, "*whisper*"),
     ]

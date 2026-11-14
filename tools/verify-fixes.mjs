@@ -1,13 +1,13 @@
 import fs from "node:fs";
 
-/* 修复验收脚本（对 http://127.0.0.1:8083 做 CDP 检查，21 项）。
+/* 修复验收脚本（对 http://127.0.0.1:9090 做 CDP 检查，21 项）。
    先起一个独立 headless Chrome（独立 profile，不碰用户已开标签）：
      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --headless=new \
        --remote-debugging-port=9455 --user-data-dir=<临时目录> --window-size=1426,900 --no-first-run about:blank
    再运行：node tools/verify-fixes.mjs        截图与结果落在 tools/evidence/ */
 const OUT = "tools/evidence";
 fs.mkdirSync(OUT, {recursive: true});
-const BASE = process.env.VERIFY_BASE || "http://127.0.0.1:8083";
+const BASE = process.env.VERIFY_BASE || "http://127.0.0.1:9090";
 const PORT = Number(process.env.VERIFY_CDP || 9455);
 
 const v = await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json();
@@ -28,6 +28,7 @@ const {targetInfos} = await send("Target.getTargets");
 const page = targetInfos.find((t) => t.type === "page");
 const {sessionId} = await send("Target.attachToTarget", {targetId: page.targetId, flatten: true});
 const ev = async (expr) => (await send("Runtime.evaluate", {expression: expr, awaitPromise: true, returnByValue: true}, sessionId)).result.value;
+const setLang = (lang) => ev(`import("/static/js/i18n.js").then(m => m.applyLang(${JSON.stringify(lang)}))`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const shot = async (name) => {
   const {data} = await send("Page.captureScreenshot", {format: "png"}, sessionId);
@@ -95,12 +96,12 @@ let afterResize = await json(`(()=>{const c=document.getElementById("tourCard");
 check("tour card re-clamps after resize", afterResize.cardBottom <= afterResize.docH, {before: beforeResize, after: afterResize});
 check("tour Next reachable at 320x640", afterResize.hit === "tourNext", afterResize);
 
-await ev(`document.querySelector('.langseg [data-lang="en"]').click()`);
+await setLang("en");
 await sleep(500);
 let tourEn = await json(`JSON.stringify({step:document.getElementById("tourStep").textContent,title:document.getElementById("tourTitle").textContent,next:document.getElementById("tourNext").textContent})`);
 check("tour step counter translated", /^Step \d+ of \d+$/.test(tourEn.step), tourEn);
 await shot("fix-tour-320-en");
-await ev(`document.querySelector('.langseg [data-lang="zh"]').click()`);
+await setLang("zh");
 await sleep(400);
 let tourZh = await json(`JSON.stringify({step:document.getElementById("tourStep").textContent})`);
 check("tour step counter back to zh", /^第 \d+ 步 /.test(tourZh.step), tourZh);
@@ -195,7 +196,7 @@ await sleep(1200);
 let zhErr = await ev(`[...document.querySelectorAll("#toasts .toast")].map(t=>t.innerText.replace(/\\s+/g," ")).join(" | ")`);
 check("barline error localized (zh)", zhErr.includes("谱面格式有误"), zhErr);
 
-await ev(`document.querySelector('.langseg [data-lang="en"]').click()`);
+await setLang("en");
 await sleep(350);
 await ev(`document.querySelectorAll("#toasts .toast").forEach(t=>t.remove())`);
 await ev(`document.getElementById("btnInspect").click()`);
@@ -203,7 +204,7 @@ await sleep(1200);
 let enErr = await ev(`[...document.querySelectorAll("#toasts .toast")].map(t=>t.innerText.replace(/\\s+/g," ")).join(" | ")`);
 check("barline error localized (en)", /Score format error/i.test(enErr), enErr);
 await shot("fix-error-en");
-await ev(`document.querySelector('.langseg [data-lang="zh"]').click()`);
+await setLang("zh");
 await sleep(350);
 
 /* ---------- 7. 多标签同步标题（BUG-014） ---------- */

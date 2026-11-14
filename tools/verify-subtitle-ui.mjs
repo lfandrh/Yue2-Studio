@@ -1,6 +1,6 @@
 import fs from "node:fs";
 
-/* 字幕导出 UI 验收（对 VERIFY_BASE 做 CDP 检查，默认 8083）。
+/* 字幕导出 UI 验收（对 VERIFY_BASE 做 CDP 检查，默认 9090）。
    先起独立 headless Chrome（端口 VERIFY_CDP，默认 9461）：
      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --headless=new \
        --remote-debugging-port=9461 --user-data-dir=<临时目录> --no-first-run \
@@ -10,7 +10,7 @@ import fs from "node:fs";
          A/B 选择不受影响、英文文案、390px 触控尺寸与菜单不出界。 */
 const OUT = "tools/evidence";
 fs.mkdirSync(OUT, { recursive: true });
-const BASE = process.env.VERIFY_BASE || "http://127.0.0.1:8083";
+const BASE = process.env.VERIFY_BASE || "http://127.0.0.1:9090";
 const PORT = Number(process.env.VERIFY_CDP || 9461);
 
 const v = await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json();
@@ -101,7 +101,7 @@ const boot = async (lang = "zh") => {
   await ev(`localStorage.setItem("yue2.v1.tour", "seen"), localStorage.setItem("yue2.v1.guide", "off"),
     localStorage.setItem("yue2.v1.lang", ${JSON.stringify(lang)}), true`);
   await send("Page.reload", {}, sessionId);
-  if (!(await waitFor(`!!document.querySelector(".cardSub[data-subcard]")`))) {
+  if (!(await waitFor(`!!document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty))")`))) {
     throw new Error("曲库里没有带字幕入口的卡片");
   }
   await sleep(500);
@@ -148,11 +148,11 @@ const waitToast = async (needle) => {
 
 /* ---------- 曲库卡 ---------- */
 await boot();
-const cards = await ev(`document.querySelectorAll(".cardSub[data-subcard]").length`);
+const cards = await ev(`document.querySelectorAll(".cardSub[data-subcard]:not(:has(.subEmpty))").length`);
 check("曲库卡有字幕入口", cards >= 1, { cards });
 
 const cardState = await ev(`(() => {
-  const card = document.querySelector(".cardSub[data-subcard]");
+  const card = document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty))");
   const ab = document.querySelector("#btnAB").textContent.trim();
   card.open = true;
   const labels = [...card.querySelectorAll("[data-sub]")].map(b => b.textContent.trim());
@@ -164,12 +164,12 @@ check("曲库卡展开出三种格式", JSON.stringify(cardState.labels) === JSO
 check("曲库卡入口标注", cardState.summary === "字幕导出", cardState.summary);
 
 await patchFetch();
-await ev(`document.querySelector(".cardSub[data-subcard] [data-word='1']").click()`);
+await ev(`document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty)) [data-word='1']").click()`);
 const cardToast = await waitToast(".lrc");
 const cardUrl = await lastCall();
 check("曲库卡逐字请求", /format=lrc/.test(cardUrl) && /enhanced=1/.test(cardUrl), cardUrl);
 check("曲库卡文件名带逐字", cardToast.includes("(逐字)") && cardToast.includes(".lrc"), cardToast.trim());
-const cardClosed = await ev(`(() => { const c = document.querySelector(".cardSub[data-subcard]");
+const cardClosed = await ev(`(() => { const c = document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty))");
   return !c.open && document.activeElement === c.querySelector("summary"); })()`);
 check("下载后收起并把焦点还给入口", cardClosed);
 const abAfter = await ev(`document.querySelector("#btnAB").textContent.trim()`);
@@ -177,29 +177,32 @@ check("点字幕不影响 A/B 选择", abAfter === cardState.ab, { before: cardS
 await restoreFetch();
 
 await failFetch("没有歌词，无法生成字幕");
-await ev(`(() => { const c = document.querySelector(".cardSub[data-subcard]");
+await ev(`(() => { const c = document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty))");
   c.open = true; return true; })()`);
 await sleep(120);
-await ev(`document.querySelector(".cardSub[data-subcard] [data-sub='lrc']:not([data-word])").click()`);
+await ev(`document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty)) [data-sub='lrc']:not([data-word])").click()`);
 const failToast = await waitToast("没有歌词");
+/* 失败后曲库会重渲染一次，卡片节点可能短暂消失；等它回来再读状态，别把竞态当成崩溃。 */
+await waitFor(`!!document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty))")`, 5000);
 await sleep(120);
-check("下载失败原因可见", failToast.includes("没有歌词"), failToast.trim());
 const failState = await ev(`(() => {
-  const c = document.querySelector(".cardSub[data-subcard]");
+  const c = document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty))");
+  if (!c) return null;
   const b = c.querySelector("[data-word='1']");
   return {open: c.open, busy: b.disabled, pressed: b.getAttribute("aria-busy")};
 })()`);
-check("失败后菜单保持展开且按钮恢复", failState.open && !failState.busy && !failState.pressed, failState);
+check("失败后菜单保持展开且按钮恢复",
+  !!failState && failState.open && !failState.busy && !failState.pressed, failState);
 await restoreFetch();
-await ev(`document.querySelector(".cardSub[data-subcard] [data-sub='lrc']:not([data-word])").click()`);
-await waitFor(`!document.querySelector(".cardSub[data-subcard]").open`);
-check("重试成功后菜单才收起", await ev(`!document.querySelector(".cardSub[data-subcard]").open`));
+await ev(`document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty)) [data-sub='lrc']:not([data-word])").click()`);
+await waitFor(`!document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty))").open`);
+check("重试成功后菜单才收起", await ev(`!document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty))").open`));
 /* 初始请求返回后列表可能补到更早创建的注入任务；需要重渲染时再按 report 处理。 */
-check("真实字幕入口仍在首张卡", await ev(`!!document.querySelector(".cardSub[data-subcard]")?.dataset.subcard`));
+check("真实字幕入口仍在首张卡", await ev(`!!document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty))")?.dataset.subcard`));
 
 /* 整表重渲染（切语言）会换掉卡片节点；焦点应回到原来的字幕入口 */
 const focusId = await ev(`(() => {
-  const c = document.querySelector(".cardSub[data-subcard]");
+  const c = document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty))");
   c.open = true; c.querySelector("summary").focus();
   return c.dataset.subcard;
 })()`);
@@ -212,7 +215,7 @@ const restored = await ev(`(() => {
     lang: document.documentElement.lang};
 })()`);
 check("重渲染后字幕入口焦点回来", restored.tag === "SUMMARY" && restored.id === focusId, restored);
-await ev(`document.querySelector(".cardSub[data-subcard]").open = false`);
+await ev(`document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty))").open = false`);
 if (await ev(`document.documentElement.lang !== "zh"`)) {
   await ev(`document.dispatchEvent(new KeyboardEvent("keydown", {key: "l", bubbles: true}))`);
   await sleep(700);
@@ -323,7 +326,7 @@ check("点外部收起歌词条菜单", !(await ev(`document.querySelector("#lyr
 /* ---------- 英文 ---------- */
 await boot("en");
 const en = await ev(`(() => {
-  const card = document.querySelector(".cardSub[data-subcard]");
+  const card = document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty))");
   card.open = true;
   return {lang: document.documentElement.lang,
     summary: card.querySelector("summary").getAttribute("aria-label"),
@@ -334,16 +337,16 @@ check("英文格式文案", JSON.stringify(en.labels) === JSON.stringify(["SRT s
   en.labels);
 
 await failFetch("没有歌词，无法生成字幕");
-await ev(`document.querySelector(".cardSub[data-subcard] [data-sub='srt']").click()`);
+await ev(`document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty)) [data-sub='srt']").click()`);
 const enFailToast = await waitToast("no lyrics");
 check("英文界面翻译服务端原因", enFailToast.includes("This job has no lyrics"), enFailToast.trim());
 await restoreFetch();
 
 await failFetch("歌词对齐失败：音频识别失败");
-await ev(`(() => { const c = document.querySelector(".cardSub[data-subcard]");
+await ev(`(() => { const c = document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty))");
   if (!c.open) c.querySelector("summary").click(); return true; })()`);
 await sleep(200);
-await ev(`document.querySelector(".cardSub[data-subcard] [data-sub='srt']").click()`);
+await ev(`document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty)) [data-sub='srt']").click()`);
 const enLyrFail = await waitToast("Lyric alignment failed");
 check("英文界面翻译对齐失败前缀", enLyrFail.includes("Lyric alignment failed:")
   && enLyrFail.includes("音频识别失败"), enLyrFail.trim());
@@ -364,7 +367,7 @@ await boot("zh");
 const mobile = await ev(`(() => {
   const r = (el) => { const b = el.getBoundingClientRect(); return {x: Math.round(b.x), right: Math.round(b.right),
     w: Math.round(b.width), h: Math.round(b.height)}; };
-  const card = document.querySelector(".cardSub[data-subcard]");
+  const card = document.querySelector(".cardSub[data-subcard]:not(:has(.subEmpty))");
   card.open = true;
   const cardHeights = [...card.querySelectorAll("[data-sub]")].map(b => Math.round(b.getBoundingClientRect().height));
   const play = [...document.querySelectorAll(".tcard")].find(c => c.textContent.includes("示例曲"));

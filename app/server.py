@@ -19,6 +19,7 @@ import threading
 import time
 import unicodedata
 import uuid
+import urllib.request
 from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -37,7 +38,16 @@ log = logs.setup()
 
 ROOT = Path(__file__).resolve().parents[1]
 KIT = ROOT / "YuE"
-PYTHON_EXE = KIT / ".venv" / "Scripts" / "python.exe"
+def _resolve_python() -> Path:
+    """开发环境用 venv 的 Scripts\\python.exe；整合包用放在 .venv\\python.exe 的便携解释器。"""
+    venv = KIT / ".venv"
+    for candidate in (venv / "Scripts" / "python.exe", venv / "python.exe"):
+        if candidate.exists():
+            return candidate
+    return venv / "Scripts" / "python.exe"
+
+
+PYTHON_EXE = _resolve_python()
 WORKER_SCRIPT = ROOT / "app" / "model_worker.py"
 MODEL_DIR = KIT / "models" / "YuE2-3B"
 VAE_DIR = KIT / "models" / "YuE2-Vae"
@@ -284,6 +294,13 @@ EVENT_SEQ_LOCK = threading.Lock()
 # 超出后由 ready 帧 + 前端全量刷新兜底任务状态。
 EVENT_HISTORY_MAXLEN = 1000
 EVENT_HISTORY: "deque[dict]" = deque(maxlen=EVENT_HISTORY_MAXLEN)
+
+SERVER_PORT = int(os.environ.get("YUE2_PORT", "9090"))
+UPDATE_DIR = ROOT / "runs" / "_update"
+UPDATE_LOCK = threading.Lock()
+UPDATE_STATE = {"phase": "idle", "detail": "", "at": 0.0}
+UPDATE_TIMEOUT = 180.0
+VERSION_CACHE = {"at": 0.0, "data": None}
 
 
 # ------------------------------------------------------------------- job models
@@ -2717,6 +2734,164 @@ def retry_lyrics(job_id: str) -> dict:
     return {"status": "pending"}
 
 
+# ------------------------------------------------------------------- update
+def _read_json(path: Path, default):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return default
+
+
+def _version_tuple(value: str) -> tuple:
+    parts = []
+    for chunk in str(value or "").split("."):
+        num = ""
+        for ch in chunk:
+            if ch.isdigit():
+                num += ch
+            else:
+                break
+        parts.append(int(num) if num else 0)
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts[:3])
+
+
+def current_version() -> dict:
+    """版本身份 + 更新源配置。带 30s 缓存，供探活与界面共用。"""
+    now = time.time()
+    if VERSION_CACHE["data"] and now - VERSION_CACHE["at"] < 30:
+        return VERSION_CACHE["data"]
+    info = _read_json(ROOT / "version.json", {})
+    config = _read_json(ROOT / "update.json", {})
+    result = {
+        "version": str(info.get("version") or "dev"),
+        "commit": str(info.get("commit") or ""),
+        "built_at": str(info.get("built_at") or ""),
+        "update_url": str(config.get("update_url") or ""),
+        "channel": str(config.get("channel") or "stable"),
+        "auto_check": bool(config.get("auto_check", False)),
+    }
+    VERSION_CACHE["data"] = result
+    VERSION_CACHE["at"] = now
+    return result
+
+
+@app.get("/api/system/version")
+def system_version() -> dict:
+    return current_version()
+
+
+@app.post("/api/system/update/check")
+def update_check() -> dict:
+    info = current_version()
+    url = info["update_url"]
+    if not url:
+        raise HTTPException(400, "没有配置更新源（update.json 的 update_url）")
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": "YuE2-Updater/1.0"})
+        with urllib.request.urlopen(request, timeout=20) as response:
+            manifest = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001 - 网络/格式问题统一回报
+        raise HTTPException(502, f"检查更新失败：{exc}")
+    latest = str(manifest.get("version") or "")
+    if not latest:
+        raise HTTPException(502, "更新清单缺少版本号")
+    current = info["version"]
+    has_update = _version_tuple(latest) > _version_tuple(current)
+    min_version = str(manifest.get("min_version") or "")
+    blocked = bool(min_version) and _version_tuple(current) < _version_tuple(min_version)
+    return {
+        "current": current,
+        "latest": latest,
+        "has_update": has_update,
+        "url": str(manifest.get("url") or ""),
+        "sha256": str(manifest.get("sha256") or ""),
+        "size": manifest.get("size") or 0,
+        "changelog": str(manifest.get("changelog") or ""),
+        "published_at": str(manifest.get("published_at") or ""),
+        "min_version": min_version,
+        "blocked": blocked,
+        "reason": (f"当前版本 {current} 低于该更新要求的最低版本 {min_version}，"
+                   f"请下载完整整合包覆盖安装" if blocked else ""),
+    }
+
+
+@app.post("/api/system/update/download")
+def update_download(payload: dict) -> dict:
+    url = str(payload.get("url") or "")
+    sha256 = str(payload.get("sha256") or "").lower()
+    if not url:
+        raise HTTPException(400, "缺少下载地址")
+    with UPDATE_LOCK:
+        if UPDATE_STATE["phase"] not in ("idle", "downloaded"):
+            raise HTTPException(409, f"更新正在进行：{UPDATE_STATE['phase']}")
+        UPDATE_STATE.update(phase="downloading", detail="正在下载更新包", at=time.time())
+    UPDATE_DIR.mkdir(parents=True, exist_ok=True)
+    target = UPDATE_DIR / "update.zip"
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": "YuE2-Updater/1.0"})
+        with urllib.request.urlopen(request, timeout=UPDATE_TIMEOUT) as response, \
+                target.open("wb") as out:
+            shutil.copyfileobj(response, out, length=256 * 1024)
+    except Exception as exc:  # noqa: BLE001
+        target.unlink(missing_ok=True)
+        with UPDATE_LOCK:
+            UPDATE_STATE.update(phase="idle", detail=f"下载失败：{exc}", at=time.time())
+        raise HTTPException(502, f"下载失败：{exc}")
+    digest = hashlib.sha256(target.read_bytes()).hexdigest()
+    if sha256 and digest != sha256:
+        target.unlink(missing_ok=True)
+        with UPDATE_LOCK:
+            UPDATE_STATE.update(phase="idle", detail="校验失败，已删除更新包", at=time.time())
+        raise HTTPException(400, f"校验和不匹配：{digest}")
+    with UPDATE_LOCK:
+        UPDATE_STATE.update(phase="downloaded", detail="下载并校验完成", at=time.time())
+    return {"path": str(target), "sha256": digest, "size": target.stat().st_size}
+
+
+@app.post("/api/system/update/apply")
+def update_apply(payload: dict | None = None) -> dict:
+    payload = payload or {}
+    zip_path = UPDATE_DIR / "update.zip"
+    if not zip_path.is_file():
+        raise HTTPException(400, "还没有下载更新包")
+    if MODEL_BUSY or QUEUE.qsize() > 0:
+        raise HTTPException(409, "有任务正在生成，等它完成后再更新")
+    port = int(payload.get("port") or SERVER_PORT)
+    updater = ROOT / "app" / "updater.py"
+    if not updater.is_file():
+        raise HTTPException(400, "更新程序缺失：app/updater.py")
+    with UPDATE_LOCK:
+        UPDATE_STATE.update(phase="applying", detail="正在安装更新", at=time.time())
+    try:
+        # cmd /c start 让 updater 成为独立进程，stop.bat 的 taskkill /T 不会带走它
+        subprocess.Popen(
+            ["cmd.exe", "/c", "start", "", "/b", str(PYTHON_EXE), str(updater),
+             "--zip", str(zip_path), "--port", str(port), "--timeout", "150"],
+            cwd=str(ROOT), close_fds=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        with UPDATE_LOCK:
+            UPDATE_STATE.update(phase="idle", detail=f"启动更新失败：{exc}", at=time.time())
+        raise HTTPException(500, f"启动更新失败：{exc}")
+    return {"status": "updating", "port": port, "detail": "更新中，服务将自动重启"}
+
+
+@app.get("/api/system/update/status")
+def update_status() -> dict:
+    data = _read_json(UPDATE_DIR / "status.json", {})
+    with UPDATE_LOCK:
+        if not data or UPDATE_STATE["at"] > data.get("at", 0):
+            return {"phase": UPDATE_STATE["phase"], "detail": UPDATE_STATE["detail"],
+                    "at": UPDATE_STATE["at"], "ok": False,
+                    "version": current_version()["version"]}
+    data = dict(data)
+    data.setdefault("version", current_version()["version"])
+    return data
+
+
 # ------------------------------------------------------------------- system
 @app.get("/api/system/doctor")
 def system_doctor(refresh: bool = False) -> dict:
@@ -2751,6 +2926,7 @@ def health() -> JSONResponse:
     return JSONResponse(
         status_code=200 if ok else 503,
         content={"status": "ok" if ok else "degraded",
+                 "version": current_version()["version"],
                  "jobs": jobs, "queued": QUEUE.qsize(),
                  "subscribers": subscribers, "model_busy": MODEL_BUSY,
                  "time": time.time()})

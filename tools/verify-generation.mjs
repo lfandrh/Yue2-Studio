@@ -7,7 +7,7 @@ import fs from "node:fs";
    再运行：node tools/verify-generation.mjs        截图与报告落在 tools/evidence/ */
 const OUT = "tools/evidence";
 fs.mkdirSync(OUT, {recursive: true});
-const BASE = process.env.VERIFY_BASE || "http://127.0.0.1:8083";
+const BASE = process.env.VERIFY_BASE || "http://127.0.0.1:9090";
 const PORT = Number(process.env.VERIFY_CDP || 9458);
 const DEADLINE_MS = 9 * 60 * 1000;
 
@@ -69,7 +69,7 @@ await send("Page.navigate", {url: BASE + "/"}, sessionId);
 if (!(await waitFor(`document.readyState === "complete" && !!document.getElementById("btnGen")`))) {
   throw new Error("page did not load");
 }
-await ev(`localStorage.setItem("yue2.tour", "seen"); localStorage.setItem("yue2.guide", "off")`);
+await ev(`localStorage.setItem("yue2.v1.tour", "seen"); localStorage.setItem("yue2.v1.guide", "off")`);
 await send("Page.reload", {}, sessionId);
 if (!(await waitFor(`document.readyState === "complete" && !!document.getElementById("btnGen")`))) {
   throw new Error("page did not reload");

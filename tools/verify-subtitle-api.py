@@ -25,8 +25,10 @@ sys.path.insert(0, str(ROOT))
 
 from app import server, subtitles
 
-PYTHON = ROOT / "YuE" / ".venv" / "Scripts" / "python.exe"
-BASE_PORT = int(os.environ.get("VERIFY_PORT", "8099"))
+_VENV = ROOT / "YuE" / ".venv"
+PYTHON = next((p for p in (_VENV / "Scripts" / "python.exe", _VENV / "python.exe") if p.exists()),
+               _VENV / "Scripts" / "python.exe")
+BASE_PORT = int(os.environ.get("VERIFY_PORT", "9099"))
 BASE = f"http://127.0.0.1:{BASE_PORT}"
 JOBS = ROOT / "runs" / "jobs"
 DEMO = JOBS / "song_demo_wanfeng" / "out" / "song_demo_wanfeng"

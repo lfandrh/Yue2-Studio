@@ -1,14 +1,14 @@
 import fs from "node:fs";
 
-/* 音块图验收（对 http://127.0.0.1:8084 做 CDP 检查）。
+/* 音块图验收（对 http://127.0.0.1:9091 做 CDP 检查）。
    独立 headless Chrome，端口 9456，不碰用户已开的浏览器：
      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --headless=new \
        --remote-debugging-port=9456 --user-data-dir=<临时目录> --window-size=1426,900 --no-first-run about:blank
    然后：node tools/verify-roll.mjs        截图落在 tools/evidence/ */
 const OUT = "tools/evidence";
 fs.mkdirSync(OUT, {recursive: true});
-const BASE = "http://127.0.0.1:8084";
-const PORT = 9456;
+const BASE = "http://127.0.0.1:9091";
+const PORT = Number(process.env.VERIFY_CDP || 9456);
 
 const v = await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json();
 const ws = new WebSocket(v.webSocketDebuggerUrl);
@@ -36,6 +36,7 @@ const {targetInfos} = await send("Target.getTargets");
 const page = targetInfos.find((t) => t.type === "page");
 const {sessionId} = await send("Target.attachToTarget", {targetId: page.targetId, flatten: true});
 const ev = async (expr) => (await send("Runtime.evaluate", {expression: expr, awaitPromise: true, returnByValue: true}, sessionId)).result.value;
+const setLang = (lang) => ev(`import("/static/js/i18n.js").then(m => m.applyLang(${JSON.stringify(lang)}))`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const shot = async (name) => {
   const {data} = await send("Page.captureScreenshot", {format: "png"}, sessionId);
@@ -60,7 +61,7 @@ await send("Page.enable", {}, sessionId);
 await send("Runtime.enable", {}, sessionId);
 /* 全新 profile 会触发首访引导巡览（会切视图、吞按键），验收里按“已看过”处理 */
 await send("Page.addScriptToEvaluateOnNewDocument", {
-  source: `try{localStorage.setItem("yue2.tour","seen");localStorage.setItem("yue2.guide","off");localStorage.removeItem("yue2.rollZoom")}catch(e){}`}, sessionId);
+  source: `try{localStorage.setItem("yue2.v1.tour","seen");localStorage.setItem("yue2.v1.guide","off");localStorage.removeItem("yue2.v1.rollZoom")}catch(e){}`}, sessionId);
 await send("Emulation.setDeviceMetricsOverride", {width: 1426, height: 900, deviceScaleFactor: 1, mobile: false}, sessionId);
 await send("Page.navigate", {url: BASE + "/"}, sessionId);
 if (!(await waitFor(`document.readyState === "complete" && !!document.getElementById("btnKeys")`))) {
@@ -236,7 +237,7 @@ await shot("roll-roundtrip");
 /* 9. 段落下拉有内容，英文模式不留中文 */
 const sectionText = await ev(`document.querySelector("#rollSection option")?.textContent || ""`);
 check("section dropdown filled", /小节/.test(sectionText), sectionText);
-await ev(`document.querySelector('.langseg [data-lang="en"]').click()`);
+await setLang("en");
 await sleep(900);
 const left = await json(`(()=>{const sec=document.getElementById("v-score");
   const w=document.createTreeWalker(sec,NodeFilter.SHOW_TEXT);const out=[];let n;
@@ -246,7 +247,7 @@ const left = await json(`(()=>{const sec=document.getElementById("v-score");
   return JSON.stringify(out.slice(0,10))})()`);
 check("EN mode leaves no untranslated Chinese", left.length === 0, left);
 await shot("roll-en");
-await ev(`document.querySelector('.langseg [data-lang="zh"]').click()`);
+await setLang("zh");
 await sleep(700);
 check("back to Chinese", /[\u4e00-\u9fff]/.test(await ev(`document.getElementById("tabRoll").textContent`)));
 
@@ -314,13 +315,13 @@ await shot("roll-esc");
 /* 全屏中切语言，按钮文字和提示都要跟着翻 */
 await ev(`document.getElementById("btnRollFull").click()`);
 await sleep(500);
-await ev(`document.querySelector('.langseg [data-lang="en"]').click()`);
+await setLang("en");
 await sleep(700);
 const enFocus = await json(`JSON.stringify({tx:document.getElementById("btnRollFullTx").textContent,
   title:document.getElementById("btnRollFull").title})`);
 check("button follows state after a language switch",
   enFocus.tx === "Exit full screen" && /exit/i.test(enFocus.title), enFocus);
-await ev(`document.querySelector('.langseg [data-lang="zh"]').click()`);
+await setLang("zh");
 await sleep(700);
 const zhFocus = await json(`JSON.stringify({tx:document.getElementById("btnRollFullTx").textContent,
   title:document.getElementById("btnRollFull").title})`);
@@ -440,7 +441,7 @@ check("ctrl+wheel zooms in", zw.w > zf.w + 2, {w: Math.round(zw.w), zfw: Math.ro
 check("ctrl+wheel keeps the musical position under the cursor",
   Math.abs(uAfter - uBefore) <= Math.max(2, totalU * 0.01), {uBefore: Math.round(uBefore), uAfter: Math.round(uAfter), totalU});
 
-const persisted = await ev(`(()=>{try{return localStorage.getItem("yue2.rollZoom")}catch(e){return null}})()`);
+const persisted = await ev(`(()=>{try{return localStorage.getItem("yue2.v1.rollZoom")}catch(e){return null}})()`);
 check("zoom persisted to localStorage", !!persisted && /"x":/.test(persisted), persisted);
 
 /* 短音符可点：把 dur 最小的音符滚到视口中央，点它的中心应选中它本人（验证命中容差 + 最近优先） */

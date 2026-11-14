@@ -48,3 +48,9 @@ runs/
 Thumbs.db
 .idea/
 .vscode/
+
+# Local update staging / test hosting
+/app/static/update/
+
+# 发布包：releases 下的 zip 必须入库（其余 zip 仍忽略）
+!releases/*.zip
