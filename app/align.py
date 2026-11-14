@@ -37,6 +37,10 @@ HOP = 1.0             # window stride; 3 s of overlap per window
 TS_WINDOW = 8.0       # native-timestamp engine: longer windows still decode cleanly
 TS_HOP = 4.0
 LOOKBACK = 8          # canonical units a window may re-match behind the cursor
+MIN_BLOCK = 3         # 3+ units carry enough text to identify a line on their own
+SHORT_BLOCK_NEAR = 12.0  # 2-unit matches only count while singing continues (normal pauses fit)
+MIN_UNIT_SECONDS = 0.12  # fastest plausible delivery; used to reject implausible anchors
+ESTIMATE_TOLERANCE = 2.0  # overlapping windows may refine a unit by this much, not relocate it
 
 MARKER_RE = re.compile(r"^\[[^\]]+\]$")
 UNIT_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]|[A-Za-z0-9]+(?:['’][A-Za-z]+)?")
@@ -182,6 +186,114 @@ def _pcm(audio: Path) -> tuple["object", float]:
     return mono, len(mono) / RATE
 
 
+def _window_starts(total: int, window: int, hop: int) -> list[int]:
+    """滑窗起点，末尾补一个「贴到结尾」的窗。
+
+    `range(0, total - window + 1, hop)` 只能停在 hop 的整数倍上：整首歌最后不足一个
+    hop 的音频永远不进任何窗口，尾句因此拿不到实测锚点，只能靠插值推算。
+    """
+    last = max(total - window, 0)
+    starts = list(range(0, last + 1, hop)) or [0]
+    if starts[-1] != last:
+        starts.append(last)
+    return starts
+
+
+def _match_window(heard: list[str], normed: list[str], cursor: int) -> tuple[int, list]:
+    """Anchor one ASR window to the lyric units it most likely sang.
+
+    The target window stops shortly after what this window heard. A wider window
+    (the old 3x factor) lets an identical chorus match its second occurrence:
+    the cursor then jumps over the first one, lyrics race ahead and hold for the
+    length of the skipped section. Anchoring stays forward-only; LOOKBACK only
+    lets neighbouring windows vote on a few units already matched.
+    """
+    low = max(0, cursor - LOOKBACK)
+    limit = min(len(normed), cursor + len(heard) + 8)
+    if limit - low < 2:
+        return low, []
+    matcher = SequenceMatcher(None, heard, normed[low:limit], autojunk=False)
+    return low, [block for block in matcher.get_matching_blocks() if block.size >= 2]
+
+
+def _search_far(heard: list[str], normed: list[str], cursor: int) -> tuple[int, list]:
+    """Recover the line that is actually being sung after the singer skipped lyrics.
+
+    Instrumental sections and lyric-sheet lines the model never sings leave the
+    forward cursor behind. The near window then sees real text it cannot reach.
+    Only a strong match (most of what this window heard) may jump forward; the
+    caller still checks that the jump is possible in the elapsed time, so an
+    identical chorus cannot be mistaken for the one already playing.
+    """
+    target = normed[cursor:]
+    if len(target) < 2:
+        return cursor, []
+    matcher = SequenceMatcher(None, heard, target, autojunk=False)
+    need = max(MIN_BLOCK, (len(heard) * 3 + 4) // 5)
+    return cursor, [block for block in matcher.get_matching_blocks() if block.size >= need]
+
+
+def _reachable(unit_at: int, time_at: float, anchor_unit: int, anchor_time: float) -> bool:
+    """A jump may not cover more lyric units than the elapsed audio could deliver."""
+    if time_at < anchor_time - 0.8:
+        return False
+    return (unit_at - anchor_unit) * MIN_UNIT_SECONDS <= (time_at - anchor_time) + 2.0
+
+
+def _pick_blocks(heard: list[str], normed: list[str], cursor: int, total: int,
+                 duration: float, anchor_unit: int, anchor_time: float,
+                 block_time) -> tuple[int, list]:
+    """Near-window matches first; fall back to a strong, time-reachable long jump."""
+    def usable(low: int, blocks: list) -> list:
+        out = []
+        for block in blocks:
+            time_at = block_time(block)
+            if not _plausible(total, low + block.b, time_at, duration):
+                continue
+            if not _reachable(low + block.b, time_at, anchor_unit, anchor_time):
+                continue
+            # 2 字匹配只在同一句还在唱时可信；隔了间奏再遇到，多半是别处的巧合。
+            if block.size < MIN_BLOCK and time_at - anchor_time > SHORT_BLOCK_NEAR:
+                continue
+            out.append(block)
+        return out
+
+    low, blocks = _match_window(heard, normed, cursor)
+    chosen = usable(low, blocks)
+    if chosen:
+        return low, chosen
+    low, blocks = _search_far(heard, normed, cursor)
+    chosen = usable(low, blocks)
+    return (low, chosen) if chosen else (cursor, [])
+
+
+def _plausible(total: int, unit_at: int, heard_at: float, duration: float) -> bool:
+    """Reject anchors that cannot leave room for the units still to come.
+
+    A misheard fragment near the end ("由他" from another line, "天地间" from the
+    outro) can match a later lyric line; anchoring it there squeezes every line
+    after it into the last seconds. Genuine anchors always leave at least the
+    fastest plausible delivery time for the remaining units.
+    """
+    if duration <= 0:
+        return True
+    remaining = max(0, total - unit_at)
+    return heard_at <= duration and duration - heard_at >= remaining * MIN_UNIT_SECONDS
+
+
+def _add_estimate(bucket: list[float], value: float, weight: int = 1) -> None:
+    """Keep a unit at the first place it was heard.
+
+    A repeated chorus is decoded again when the audio reaches its second
+    occurrence. Without this guard those later estimates outvote the correct
+    first one and the line drifts to the repeat. Neighbouring windows still vote
+    within ``ESTIMATE_TOLERANCE`` to smooth edge truncation.
+    """
+    if bucket and value > bucket[0] + ESTIMATE_TOLERANCE:
+        return
+    bucket.extend([value] * weight)
+
+
 def _paraformer_starts(audio: Path, normed: list[str]) -> tuple[list, float, int]:
     """Windowed Paraformer decode; each window's text is anchored forward-only.
 
@@ -195,8 +307,8 @@ def _paraformer_starts(audio: Path, normed: list[str]) -> tuple[list, float, int
     window, hop = int(WINDOW * RATE), int(HOP * RATE)
     total = len(normed)
     estimates: list[list[float]] = [[] for _ in range(total)]
-    cursor = 0
-    starts = list(range(0, max(len(samples) - window, 0) + 1, hop)) or [0]
+    cursor, anchor_unit, anchor_time = 0, 0, 0.0
+    starts = _window_starts(len(samples), window, hop)
     for start in starts:
         stream = recognizer.create_stream()
         stream.accept_waveform(RATE, samples[start:start + window])
@@ -204,21 +316,24 @@ def _paraformer_starts(audio: Path, normed: list[str]) -> tuple[list, float, int
         heard = [_norm(unit) for unit in _units(stream.result.text or "")]
         if not heard or cursor >= total:
             continue
-        # Look a little behind the cursor: neighbouring windows decode the same
-        # characters, and their median cancels each window's lead-in bias.
-        low = max(0, cursor - LOOKBACK)
-        limit = min(total, cursor + len(heard) * 3 + 6)
-        if limit - low < 2:
+        offset = start / RATE
+        low, blocks = _pick_blocks(
+            heard, normed, cursor, total, duration, anchor_unit, anchor_time,
+            lambda block, offset=offset: offset + (block.a + 0.5) / len(heard) * WINDOW)
+        if not blocks:
             continue
-        matcher = SequenceMatcher(None, heard, normed[low:limit], autojunk=False)
-        blocks = [block for block in matcher.get_matching_blocks() if block.size >= 2]
+        # 邻窗解码会重复听到同一段字，取中位数抵消各窗的起始偏差。
         for heard_at, unit_at, size in blocks:
-            for offset in range(size):
-                position = start / RATE + (heard_at + offset + 0.5) / len(heard) * WINDOW
+            for step in range(size):
+                position = offset + (heard_at + step + 0.5) / len(heard) * WINDOW
                 # Longer decodes are less truncated, so they get more weight.
-                estimates[low + unit_at + offset].extend([position] * len(heard))
+                _add_estimate(estimates[low + unit_at + step], position, len(heard))
         if blocks:
-            cursor = max(cursor, low + max(block.b + block.size for block in blocks))
+            cursor = anchor_unit = max(
+                cursor, low + max(block.b + block.size for block in blocks))
+            anchor_time = max(
+                anchor_time, max(offset + (block.a + 0.5) / len(heard) * WINDOW
+                                 for block in blocks))
         if cursor >= total:
             break
     times = [float(np.median(values)) if values else None for values in estimates]
@@ -273,8 +388,8 @@ def _paraformer_ts_starts(audio: Path, normed: list[str],
     window, hop = int(TS_WINDOW * RATE), int(TS_HOP * RATE)
     total = len(normed)
     estimates: list[list[float]] = [[] for _ in range(total)]
-    cursor = 0
-    starts = list(range(0, max(len(samples) - window, 0) + 1, hop)) or [0]
+    cursor, anchor_unit, anchor_time = 0, 0, 0.0
+    starts = _window_starts(len(samples), window, hop)
     for start in starts:
         block = samples[start:start + window]
         if block.size < int(0.5 * RATE):
@@ -283,18 +398,20 @@ def _paraformer_ts_starts(audio: Path, normed: list[str],
         if not heard or cursor >= total:
             continue
         offset = start / RATE
-        low = max(0, cursor - LOOKBACK)
-        limit = min(total, cursor + len(heard) * 3 + 6)
-        if limit - low < 2:
+        low, blocks = _pick_blocks(
+            [unit for unit, _ in heard], normed, cursor, total, duration,
+            anchor_unit, anchor_time, lambda block_, offset=offset: offset + heard[block_.a][1])
+        if not blocks:
             continue
-        matcher = SequenceMatcher(None, [item[0] for item in heard],
-                                  normed[low:limit], autojunk=False)
-        blocks = [block_ for block_ in matcher.get_matching_blocks() if block_.size >= 2]
         for heard_at, unit_at, size in blocks:
             for index in range(size):
-                estimates[low + unit_at + index].append(offset + heard[heard_at + index][1])
+                _add_estimate(estimates[low + unit_at + index],
+                              offset + heard[heard_at + index][1])
         if blocks:
-            cursor = max(cursor, low + max(block_.b + block_.size for block_ in blocks))
+            cursor = anchor_unit = max(
+                cursor, low + max(block_.b + block_.size for block_ in blocks))
+            anchor_time = max(
+                anchor_time, max(offset + heard[block_.a][1] for block_ in blocks))
         if cursor >= total:
             break
     times = [float(np.median(values)) if values else None for values in estimates]
@@ -422,35 +539,64 @@ def _fill_gaps(spans: list[tuple[float, float] | None], duration: float) -> None
         left = spans[start - 1][1] if start > 0 else None
         right = spans[index][0] if index < total else None
         if left is not None and right is not None:
-            step = max(right - left, count * 0.06) / count
-            for offset in range(count):
-                spans[start + offset] = (left + offset * step, left + (offset + 1) * step)
+            natural = (right - left) / count
+            cap = max(average * 1.6, 0.12)
+            if natural <= cap:
+                step = max(natural, 0.06)
+                for offset in range(count):
+                    spans[start + offset] = (left + offset * step, left + (offset + 1) * step)
+            else:
+                # 中间隔着间奏或歌词没唱的行：这档字属于右锚点所在句子的开头，
+                # 贴着它排。按整段均分会把每个字拉成好几秒，行首被拖回上一行末尾。
+                step = cap
+                begin = right - count * step
+                for offset in range(count):
+                    spans[start + offset] = (max(0.0, begin + offset * step),
+                                             begin + (offset + 1) * step)
         elif right is not None:
             step = min(count * average, right) / count
             for offset in range(count):
                 spans[start + offset] = (right - step * count + offset * step,
                                          right - step * count + (offset + 1) * step)
         elif left is not None:
+            # 只有左锚的尾档按平均字长外推；不夹住的话时间戳能越过音频结尾，
+            # 播放器 timeupdate 永远命不中那几行，表现为「最后一句不亮」。
+            step = average
+            if duration and left + count * step > duration - 0.05:
+                step = max(0.03, (duration - 0.05 - left) / count)
             for offset in range(count):
-                spans[start + offset] = (left + offset * average, left + (offset + 1) * average)
+                spans[start + offset] = (left + offset * step, left + (offset + 1) * step)
         else:
             step = min(duration or 1.0, count * average) / count
             for offset in range(count):
                 spans[start + offset] = (offset * step, (offset + 1) * step)
 
 
-def _monotonic(starts: list[float]) -> list[float]:
+def _finalize_starts(starts: list[float], duration: float) -> list[float]:
+    """Strictly increasing starts that still fit before the audio ends.
+
+    Clamping every late start to ``duration - 0.05`` separately would give several
+    lines the same timestamp; the player's binary search then skips all but the
+    last one. Pull the tail back as a block instead, preserving order and spacing.
+    """
     fixed, last = [], 0.0
     for start in starts:
         start = max(start, last)
         fixed.append(round(start, 3))
         last = start + 0.03
+    ceiling = max(0.0, duration - 0.05)
+    for index in range(len(fixed) - 1, -1, -1):
+        limit = ceiling - 0.03 * (len(fixed) - 1 - index)
+        if fixed[index] <= limit:
+            break
+        fixed[index] = max(0.0, limit)
     return fixed
 
 
 def _build(starts: list[float], duration: float, lines: list[dict],
            engine: str, confidence: float) -> dict:
     count = len(starts)
+    ceiling = max(0.0, duration)
     payload_lines, cursor = [], 0
     for line in lines:
         size = len(line["units"])
@@ -461,6 +607,10 @@ def _build(starts: list[float], duration: float, lines: list[dict],
             following = starts[cursor - size + index + 1] if index + 1 < size else (
                 starts[cursor] if cursor < count else None)
             end = following if following is not None and following > chunk[index] else chunk[index] + 0.45
+            # 结束时间夹进音频时长：越界区间会让下游的逐字/进度判断落到不存在的音频上。
+            end = min(end, ceiling)
+            if end <= chunk[index]:
+                end = min(chunk[index] + 0.03, ceiling)
             units.append({"text": text, "start": chunk[index], "end": round(end, 3)})
         payload_lines.append({"text": line["text"], "start": units[0]["start"],
                               "end": units[-1]["end"], "units": units})
@@ -478,23 +628,34 @@ def _build(starts: list[float], duration: float, lines: list[dict],
     }
 
 
+def _whisper_label() -> str:
+    """Report the model actually on disk; the UI writes this into lyrics.json."""
+    path = whisper_dir()
+    if path is None:
+        return "faster-whisper"
+    name = path.name
+    if re.fullmatch(r"[0-9a-f]{8,}", name):  # HF snapshot hash, use the repo name
+        name = path.parent.parent.name.removeprefix("models--").replace("--", "/")
+    return f"faster-whisper {name}"
+
+
 def align(audio: Path, lyrics: str, engine: str | None = None) -> dict:
     lines = lyric_lines(lyrics)
     if not lines:
-        raise ValueError("歌词为空")
+        raise ValueError("歌词里没有可对齐的字（目前支持中文与拉丁字母）")
     normed = [_norm(unit) for line in lines for unit in line["units"]]
     choice = (engine or os.environ.get("YUE2_ALIGN_ENGINE") or "auto").strip().lower()
-    attempts = []
-    if choice in ("auto", "paraformer-ts") and paraformer_ts_ready():
-        attempts.append(("Paraformer 原生时间戳",
-                         lambda: _paraformer_ts_starts(audio, normed, lines)))
-    if choice in ("auto", "paraformer") and paraformer_ready():
-        attempts.append(("Paraformer 窗口对齐", lambda: _paraformer_starts(audio, normed)))
-    if choice in ("auto", "whisper") and whisper_dir() is not None:
-        attempts.append(("faster-whisper large-v3-turbo",
-                         lambda: _whisper_starts(audio, normed, _language(lyrics))))
+    known = [("paraformer-ts", "Paraformer 原生时间戳", paraformer_ts_ready,
+              lambda: _paraformer_ts_starts(audio, normed, lines)),
+             ("paraformer", "Paraformer 窗口对齐", paraformer_ready,
+              lambda: _paraformer_starts(audio, normed)),
+             ("whisper", _whisper_label(),
+              lambda: whisper_dir() is not None,
+              lambda: _whisper_starts(audio, normed, _language(lyrics)))]
+    attempts = [(label, run) for key, label, ready, run in known
+                 if choice in ("auto", key) and ready()]
     if not attempts:
-        raise RuntimeError("没有可用的歌词对齐模型")
+        raise RuntimeError(_engine_unavailable(choice, known))
 
     errors = []
     for label, run in attempts:
@@ -504,16 +665,29 @@ def align(audio: Path, lyrics: str, engine: str | None = None) -> dict:
             errors.append(f"{label}：{exc}")
             continue
         confidence = matched / max(len(normed), 1)
-        if matched < 3 or confidence < 0.2:
+        # 绝对下限跟着歌词长度缩放：一两句的副歌只有十个字，写死 3 个字会把整首拒掉。
+        floor = max(2, round(len(normed) * 0.05))
+        if matched < floor or confidence < 0.2:
             errors.append(f"{label}：可对齐的字太少（{matched}/{len(normed)}）")
             continue
         if duration <= 0:
             duration = max((item for item in starts if item is not None), default=1.0)
         spans = [(item, item + 0.03) if item is not None else None for item in starts]
         _fill_gaps(spans, duration)
-        fixed = _monotonic([item[0] for item in spans if item is not None])
+        fixed = _finalize_starts([item[0] for item in spans if item is not None], duration)
         return _build(fixed, duration, lines, label, confidence)
     raise ValueError("；".join(errors) or "没有识别到可对齐的演唱")
+
+
+def _engine_unavailable(choice: str, known: list[tuple]) -> str:
+    """显式指定的引擎没模型时，说清是「你指定的这个」不可用，而不是泛泛一句没有模型。"""
+    labels = {key: label for key, label, _, _ in known}
+    if choice not in labels:
+        return f"未知的对齐引擎「{choice}」，可选：{'、'.join(labels)}"
+    ready = [lbl for key, lbl, check, _ in known if key != choice and check()]
+    return (f"指定引擎「{labels[choice]}」不可用：本机没有它的模型。"
+            + (f"当前可用：{'、'.join(ready)}；不设 YUE2_ALIGN_ENGINE 则自动选。" if ready
+               else "当前一个对齐模型都没有。"))
 
 
 # ------------------------------------------------------------------ background queue

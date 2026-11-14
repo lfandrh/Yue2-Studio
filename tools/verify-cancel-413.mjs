@@ -1,4 +1,5 @@
-/* 端到端补测：浏览器内 3MB 提交返回 413（不是断连）、真实取消任务的中文提示、测试任务清理。
+/* 会创建真实任务：跑之前要你明确同意（本项目的规矩是不擅自生成音乐）。
+   端到端补测：浏览器内 3MB 提交返回 413（不是断连）、真实取消任务的中文提示、测试任务清理。
    需要先有 tools/verify-fixes.mjs 注释里的 headless Chrome（端口 9455）与 8083 服务。
    运行：node tools/verify-cancel-413.mjs   —— 会创建并删除一个 plan 任务。 */
 const BASE = "http://127.0.0.1:8083";
@@ -64,3 +65,4 @@ const after = await (await fetch(`${BASE}/api/jobs`)).json();
 check("test job deleted", del.status === 200 && !after.jobs.some((j) => j.id === jobId), {del: delBody, remaining: after.jobs.length});
 console.log(JSON.stringify(results.filter((r) => !r.pass)));
 ws.close();
+process.exit(results.some((r) => !r.pass) ? 1 : 0);

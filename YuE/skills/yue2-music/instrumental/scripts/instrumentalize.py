@@ -20,7 +20,7 @@ def section_starts(text, score):
         if line.startswith('% '):
             pending = line[2:]
             if pending not in SECTIONS:
-                raise ValueError(f'Unknown section label: {pending}')
+                raise ValueError(f'Unknown section label: {pending} (allowed: {sorted(SECTIONS)})')
         if score.music_lines.get(index) != 'Vocal':
             continue
         if pending is not None:

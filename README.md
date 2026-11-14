@@ -7,6 +7,8 @@
 ```bat
 start.bat      :: 起服务并自动打开 http://127.0.0.1:8083
 stop.bat       :: 结束 8083 上的进程（含常驻的 model_worker 子进程，释放显存）
+
+启动前请确认：`app/server.py` 存在，且虚拟环境位于 `YuE/.venv/Scripts/python.exe`。`start.bat` 会先做这两项检查；完整依赖与模型诊断请使用界面「系统」页的 doctor，`start.bat` 不会预先加载模型。
 ```
 
 打开页面后：右上角「加载模型」选显卡或 CPU → 创作页写风格与歌词 → 生成。
@@ -20,10 +22,10 @@ CPU 单首实测约 8 分 30 秒（42 秒音频 / 509 秒耗时），3060 Ti 8GB
 | `app/server.py` | FastAPI 后端：任务队列、常驻 worker 管理、SQLite 元数据、产物索引 |
 | `app/model_worker.py` | 常驻推理子进程（加载一次模型，按命令跑 plan / song / rerender / redecode） |
 | `app/static/` | 前端（原生 ES module，无构建步骤）：`index.html` + `js/{app,store,ui,i18n}.js` + `styles/` |
-| `app/static/index.legacy.html` | 旧版单文件界面，`GET /legacy` 可访问，仅作对照 |
+| `app/static/index.legacy.html` | 旧版单文件对照页，只通过 `GET /legacy` 访问；生产导航不链接它，页面顶部有旧版标识 |
 | `demo/showcase/` | 内置示例曲的产物（重启时自动导入曲库为 `song_demo_wanfeng`） |
 | `runs/` | 运行数据：`jobs/<id>/`（产物，其中 `.meta/run.log` 是这条任务自己的完整输出与栈）、`_trash/`（删除的任务移到这里，超过 30 天在启动时自动清掉）、`yue2.db`、`app.log`（服务日志，5 MB × 3 轮转）、`model_worker.log`（模型进程日志，起进程时超 5 MB 滚成 `.1`）。失败时界面给的「日志编号」可在三个日志里搜到同一条 |
-| `YuE/` | 官方仓库副本 + `.venv` + `models/`（权重）+ `wheels/`（可选的 flash_attn 轮子，装上后语义加速走 FA2）+ `skills/yue2-music/` |
+| `YuE/` | 官方仓库副本 + `.venv` + `models/`（权重）+ `wheels/`（可选的 flash_attn 轮子，装上后语义加速走 FA2）+ `skills/yue2-music/`。模型目录由后端解析为 `YuE/models/YuE2-3B` 与 `YuE/models/YuE2-Vae`，缺失时 doctor 会明确报告 |
 | `tools/` | 验收脚本（CDP 驱动独立 headless Chrome，不碰你正在用的浏览器标签） |
 
 ## 生成加速实测（RTX 3060 Ti 8GB / torch 2.9.1+cu128）
@@ -59,6 +61,52 @@ YuE\.venv\Scripts\python.exe -m yue2.cli batch --model YuE\models\YuE2-3B --vae 
 ```
 
 去掉 `--ar-accel` / `--nar-accel` 就是「关」那档。上面三个 run 的完整产物留在 `runs/accel-bench/`（`accel_on` = 复制法、`accel_flash` = FA2）和曲库任务 `song_20261029_160314_1124`（基线）里，`result.json` 内含逐阶段耗时与显存账本。
+
+## 部署与健康检查
+
+### 探活端点
+
+`GET /api/health` 是轻量部署探活：只读内存队列与 SQLite 计数，不加载模型、不扫描磁盘、也不跑 doctor 子进程。返回示例：
+
+```json
+{"status": "ok", "jobs": 9, "queued": 0, "subscribers": 1, "model_busy": false, "time": 1763123456.7}
+```
+
+- HTTP 200 + `status=ok`：可接流量；HTTP 503 + `status=degraded`：索引不可达，负载均衡应摘除实例。
+- `queued` 是当前排队任务数，`subscribers` 是在线 SSE 连接数，`model_busy` 表示模型正在生成。
+- 需要完整依赖/模型诊断时用系统页的 `GET /api/system/doctor`（会起子进程，不要当高频探活用）。
+
+手动检查：
+
+```bat
+curl http://127.0.0.1:8083/api/health
+```
+
+### 安全响应头
+
+所有响应默认带以下头（局部响应已有的值不会被覆盖，反代可再追加）：
+
+| 头 | 值 | 作用 |
+|---|---|---|
+| `X-Content-Type-Options` | `nosniff` | 禁止浏览器猜测内容类型 |
+| `X-Frame-Options` | `DENY` | 禁止被任意页面嵌套（防点击劫持） |
+| `Referrer-Policy` | `no-referrer` | 出站链接不携带来源地址 |
+| `Cross-Origin-Opener-Policy` | `same-origin` | 隔离跨源窗口 |
+| `Cross-Origin-Resource-Policy` | `same-origin` | 仅同源可加载本站资源 |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` | 显式关闭未用设备能力 |
+
+- 暂未启用 CSP：页面含内联脚本/样式，直接上 `default-src 'self'` 会破坏界面；如后续做 nonce/hash 改造再评估。
+- HTTPS 反代请自行补 `Strict-Transport-Security`。
+
+### 反向代理注意事项
+
+- SSE（`/api/events`）要求反代禁用缓冲并放宽读超时：服务已下发 `X-Accel-Buffering: no`，Nginx 仍需 `proxy_buffering off;` 与较长的 `proxy_read_timeout`。
+- 上传经反代时要放宽 `client_max_body_size`（服务端自身上限 2 MB）。
+- 应用只监听 `127.0.0.1` 且不承载公网鉴权，请放在反代之后并自行加访问控制。
+
+### 启动自检
+
+`start.bat` 会先确认 `app/server.py` 与虚拟环境存在、端口未被占用，再拉起服务；停止用 `stop.bat`。运行日志在 `runs/app.log`，删除的任务先进 `runs/_trash/`（超过 30 天启动时自动清理）。
 
 ## 复测
 

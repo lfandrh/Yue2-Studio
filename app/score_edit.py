@@ -25,6 +25,25 @@ class EditError(ValueError):
     """The requested change cannot be expressed without touching other notes."""
 
 
+def _section_index(value, sections: list) -> int:
+    """段落选择同时认序号与段名（BUG-006）：前端传的是段名，直接 int() 会 400。"""
+    if isinstance(value, int):
+        index = value
+    elif isinstance(value, str) and value.strip().isdigit():
+        index = int(value.strip())
+    elif isinstance(value, str):
+        label = value.strip().lower()
+        for i, item in enumerate(sections):
+            if str(item.get("name", "")).strip().lower() == label:
+                return i
+        raise EditError(f"没有这个段落：{value}")
+    else:
+        raise EditError("没有这个段落")
+    if not 0 <= index < len(sections):
+        raise EditError("没有这个段落")
+    return index
+
+
 def _op_int(op: dict, key: str) -> int:
     """User-supplied integer field; a missing or null value is a request error, not a 500."""
     try:
@@ -377,6 +396,10 @@ def _pin_accidentals(text: str, fresh: dict, expected: dict) -> tuple:
 def apply(abc: str, ops: list) -> dict:
     if not isinstance(ops, list) or not ops:
         raise EditError("没有要改的内容")
+    # 段落增删直接改 `lines` 的行序，其余改动记的是原始行号；混在一批里回写就会
+    # 落到别的行上，而且末了的一致性校验（下方）会被 structural 短路跳过。
+    if any(op.get("kind") in ("drop_section", "duplicate_section") for op in ops) and len(ops) > 1:
+        raise EditError("段落删除/复制要单独提交，一批里只能有这一条改动")
     structure = _measure(abc)
     lines = list(structure["lines"])
     edits = []
@@ -420,6 +443,9 @@ def apply(abc: str, ops: list) -> dict:
                 _resize(structure, name, note, target - units, edits)
                 applied.append(f"{where}的音长改了")
         elif kind == "transpose":
+            raw = op.get("semitones")
+            if isinstance(raw, float) and not raw.is_integer():
+                raise EditError("semitones 必须是整数")
             step = _op_int(op, "semitones")
             if not -24 <= step <= 24:
                 raise EditError("移调范围是正负 24 个半音")
@@ -428,16 +454,17 @@ def apply(abc: str, ops: list) -> dict:
                     _rewrite_note(structure, note, note["pitch"] + step, edits)
             applied.append(f"整曲移调 {step:+d} 个半音")
         elif kind == "tempo":
+            raw = op.get("bpm")
+            if isinstance(raw, float) and not raw.is_integer():
+                raise EditError("bpm 必须是整数")
             bpm = _op_int(op, "bpm")
             if not 20 <= bpm <= 300:
                 raise EditError("速度要在 20–300 BPM 之间")
             lines[4] = f"Q:1/4={bpm}"
             applied.append(f"速度改为 {bpm} BPM")
         elif kind in ("drop_section", "duplicate_section"):
-            index = int(op.get("section", -1))
             sections = structure["sections"]
-            if not 0 <= index < len(sections):
-                raise EditError("没有这个段落")
+            index = _section_index(op.get("section", -1), sections)
             begin = sections[index]["from_line"]
             stop = sections[index + 1]["from_line"] if index + 1 < len(sections) else len(lines)
             if kind == "drop_section":

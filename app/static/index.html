@@ -8,10 +8,12 @@
 <script>
 /* 主题与语言在首帧前落定，避免闪白/闪黑 */
 (function(){try{
-  var t=localStorage.getItem("yue2.theme")||
-    (matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");
+  var v1="yue2.v1.", t=localStorage.getItem(v1+"theme"), l=localStorage.getItem(v1+"lang");
+  if(t===null){t=localStorage.getItem("yue2.theme");if(t!==null){localStorage.setItem(v1+"theme",t);localStorage.removeItem("yue2.theme")}}
+  if(l===null){l=localStorage.getItem("yue2.lang");if(l!==null){localStorage.setItem(v1+"lang",l);localStorage.removeItem("yue2.lang")}}
+  t=t||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");
   document.documentElement.dataset.theme=t;
-  document.documentElement.lang=localStorage.getItem("yue2.lang")==="en"?"en":"zh-CN";
+  document.documentElement.lang=l==="en"?"en":"zh-CN";
 }catch(e){}})();
 </script>
 <link rel="stylesheet" href="/static/styles/tokens.css">
@@ -33,16 +35,22 @@
     <div class="mstatus" id="mstat">
       <span class="dot"></span><span id="mstatText">正在读取后端状态…</span>
     </div>
-    <span class="badge fail net" id="netBadge" hidden>连接中断 · 重连中</span>
+    <span class="badge fail" id="netBadge" hidden>连接中断 · 重连中</span>
     <div class="spacer"></div>
-    <div class="devseg" role="group" aria-label="运行设备">
-      <button type="button" data-dev="cpu" aria-pressed="false">CPU</button>
-      <button type="button" data-dev="cuda" aria-pressed="false">GPU</button>
-    </div>
-    <div class="langseg" role="group" aria-label="界面语言">
-      <button type="button" data-lang="zh" aria-pressed="true">中</button>
-      <button type="button" data-lang="en" aria-pressed="false">EN</button>
-    </div>
+    <button class="hbtn" id="btnDevice" type="button" aria-label="运行设备">
+      <svg id="icoDev" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="20" height="10" rx="2"/><circle cx="8" cy="12" r="2.2"/><path d="M14 10h5M14 14h5"/></svg>
+      <span id="devLbl" data-notr>GPU</span>
+    </button>
+    <button class="hbtn" id="btnLang" type="button" aria-label="切换到 English（快捷键 L）">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.7 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.7-3.8-9S9.5 5.6 12 3z"/></svg>
+      <span id="langLbl" data-notr>EN</span>
+    </button>
+    <a class="iconbtn social" href="https://space.bilibili.com/470166715" target="_blank" rel="noopener" aria-label="B站主页" title="B站主页（新标签页打开）">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.813 4.653h.854c1.51.054 2.769.578 3.773 1.574 1.004.995 1.524 2.249 1.56 3.76v7.36c-.036 1.51-.556 2.769-1.56 3.773s-2.262 1.524-3.773 1.56H5.333c-1.51-.036-2.769-.556-3.773-1.56S.036 18.858 0 17.347v-7.36c.036-1.511.556-2.765 1.56-3.76 1.004-.996 2.262-1.52 3.773-1.574h.774l-1.174-1.12a1.234 1.234 0 0 1-.373-.906c0-.356.124-.658.373-.907l.027-.027c.267-.249.573-.373.92-.373.347 0 .653.124.92.373L9.653 4.44c.071.071.134.142.187.213h4.267a.836.836 0 0 1 .16-.213l2.853-2.747c.267-.249.573-.373.92-.373.347 0 .662.151.929.4.267.249.391.551.391.907 0 .355-.124.657-.373.906zM5.333 7.24c-.746.018-1.373.276-1.88.773-.506.498-.769 1.13-.786 1.894v7.52c.017.764.28 1.395.786 1.893.507.498 1.134.756 1.88.773h13.334c.746-.017 1.373-.275 1.88-.773.506-.498.769-1.129.786-1.893v-7.52c-.017-.765-.28-1.396-.786-1.894-.507-.497-1.134-.755-1.88-.773zM8 11.107c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V12.44c0-.373.129-.689.386-.947.258-.257.574-.386.947-.386zm8 0c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V12.44c0-.373.129-.689.386-.947.258-.257.574-.386.947-.386z"/></svg>
+    </a>
+    <a class="iconbtn social" href="https://github.com/lfandrh" target="_blank" rel="noopener" aria-label="GitHub 主页" title="GitHub 主页（新标签页打开）">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+    </a>
     <button class="iconbtn tbtn" id="btnTheme" type="button" aria-label="切换深浅色主题" title="切换深浅色主题（快捷键 T）">
       <svg id="icoSun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M5 5l1.8 1.8M17.2 17.2 19 19M19 5l-1.8 1.8M6.8 17.2 5 19" stroke-linecap="round"/></svg>
       <svg id="icoMoon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z" stroke-linejoin="round"/></svg>
@@ -60,27 +68,32 @@
   <!-- ============ RAIL ============ -->
   <nav class="rail" aria-label="主导航">
     <div class="grp">工作区</div>
-    <button class="nav" data-view="studio" aria-current="page" type="button">
+    <button class="nav" data-view="studio" aria-current="page" type="button"
+      title="创作" aria-label="创作" aria-keyshortcuts="1">
       <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-      <span class="lb">创作</span><span class="count" id="cStudio">0</span>
+      <span class="lb">创作</span><span class="count" id="cStudio">0</span><kbd class="nkey" data-notr>1</kbd>
     </button>
-    <button class="nav" data-view="score" type="button">
+    <button class="nav" data-view="score" type="button"
+      title="乐谱工作台" aria-label="乐谱工作台" aria-keyshortcuts="2">
       <svg viewBox="0 0 24 24"><path d="M3 9h18M3 12h18M3 15h18"/><ellipse cx="9" cy="14.6" rx="2.2" ry="1.7" transform="rotate(-20 9 14.6)"/><path d="M11.2 14.2V5.6l6-1.2"/></svg>
-      <span class="lb">乐谱工作台</span>
+      <span class="lb">乐谱工作台</span><kbd class="nkey" data-notr>2</kbd>
     </button>
-    <button class="nav" data-view="library" type="button">
+    <button class="nav" data-view="library" type="button"
+      title="曲库" aria-label="曲库" aria-keyshortcuts="3">
       <svg viewBox="0 0 24 24"><path d="M4 4h4v16H4zM10 4h4v16h-4zM17 5l3 1-3.5 13-3-1z"/></svg>
-      <span class="lb">曲库</span><span class="count" id="cLib">0</span>
+      <span class="lb">曲库</span><span class="count" id="cLib">0</span><kbd class="nkey" data-notr>3</kbd>
     </button>
     <div class="grp">帮助</div>
-    <button class="nav" data-view="guide" type="button">
+    <button class="nav" data-view="guide" type="button"
+      title="教程" aria-label="教程" aria-keyshortcuts="4">
       <svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 18.5V5.5M8 7h8M8 11h5"/></svg>
-      <span class="lb">教程</span>
+      <span class="lb">教程</span><kbd class="nkey" data-notr>4</kbd>
     </button>
     <div class="grp">本机</div>
-    <button class="nav" data-view="system" type="button">
+    <button class="nav" data-view="system" type="button"
+      title="系统" aria-label="系统" aria-keyshortcuts="5">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.08a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.08a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      <span class="lb">系统</span>
+      <span class="lb">系统</span><kbd class="nkey" data-notr>5</kbd>
     </button>
     <div class="railfoot" id="railfoot">单任务队列</div>
   </nav>
@@ -95,6 +108,36 @@
         <p>写风格与歌词 → 模型先出<b>可读可改的乐谱</b> → 渲染 48kHz 立体声完整歌曲。</p>
       </div>
 
+      <!-- 生成台：只在有运行中/排队/刚结束的任务时出现；所有数字由 app.js 的 consoleModel() 单源派生 -->
+      <section class="genconsole" id="genconsole" role="region" aria-label="生成进度" hidden>
+        <div class="gcHead">
+          <span class="gcState" id="gcState"></span>
+          <span class="gcTitle" id="gcTitle" data-notr></span>
+          <span class="gcMini" id="gcMini"></span>
+          <span class="gcId mono" id="gcId" data-notr></span>
+          <span class="spacer"></span>
+          <span class="gcActs" id="gcActs"></span>
+          <button class="btn sm ghost gcFold" id="gcFold" type="button" aria-expanded="true" aria-controls="gcBody">收起</button>
+        </div>
+        <div class="gcBody" id="gcBody">
+          <div class="gcNum">
+            <div class="gcPct" id="gcPctWrap"><b id="gcPct">—</b><span>%</span></div>
+            <div class="gcLeft"><span class="k" id="gcLeftLbl">剩余</span><b class="mono" id="gcLeft">—</b></div>
+            <div class="gcUsed"><span class="k">已用</span><b class="mono" id="gcUsed">—</b><span class="sep">·</span><span class="k">总约</span><b class="mono" id="gcTotal">—</b></div>
+          </div>
+          <div class="gcMain">
+            <ol class="gcAxis" id="gcAxis" aria-label="生成阶段"></ol>
+            <div class="gcBar" id="gcBar" role="progressbar" aria-label="生成进度" aria-valuemin="0" aria-valuemax="100">
+              <i id="gcFill"></i>
+            </div>
+            <div class="gcNow" id="gcNow"></div>
+            <div class="gcNote" id="gcNote" hidden></div>
+          </div>
+        </div>
+        <div class="sr-only" id="gcLive" role="status" aria-live="polite"></div>
+        <div class="sr-only" id="gcAlert" role="alert"></div>
+      </section>
+
       <!-- 首次进入的三步引导：内容由 renderGuide() 生成（要跟着表单是否已填而变化） -->
       <div class="guide" id="guide" hidden></div>
 
@@ -105,8 +148,8 @@
             <div class="inline" style="justify-content:space-between;margin-bottom:var(--sp4);gap:var(--sp3)">
               <h2 style="min-width:0"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h7"/></svg>风格描述</h2>
               <div class="inline" style="gap:var(--sp2);flex:none;flex-wrap:nowrap">
-                <select class="inp" id="fPreset" aria-label="范例风格" style="min-height:32px;font-size:13px;width:200px"></select>
-                <button class="btn sm" id="btnPreset" type="button">载入范例</button>
+                <select class="inp" id="fPreset" aria-label="范例风格"></select>
+                <button class="btn sm" id="btnPreset" type="button" title="把所选范例的风格原文与歌词一起填进下方表单；填完还能继续改">载入范例</button>
               </div>
             </div>
             <div class="grid2">
@@ -158,6 +201,34 @@
             </div>
             <div class="note" id="lintNote" hidden></div>
             <div class="hint">模型按<b>音节</b>排旋律：单行过长或段落失衡会唱飘。中文每行 7–13 字、副歌重复句式更稳。段落标记 <span class="idn">[Verse]</span> <span class="idn">[Chorus]</span> 是模型词表，不随界面语言翻译。</div>
+
+            <div class="divider"></div>
+            <details class="scoresec" id="studioScoreSec">
+              <summary>
+                <h2><svg viewBox="0 0 24 24"><path d="M3 9h18M3 12h18M3 15h18"/><ellipse cx="9" cy="14.6" rx="2.2" ry="1.7" transform="rotate(-20 9 14.6)"/><path d="M11.2 14.2V5.6l6-1.2"/></svg>文本谱面</h2>
+                <span class="sub" id="studioScoreMeta" data-notr></span>
+                <span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+              </summary>
+              <div class="scoresecBody">
+                <div class="inline" style="justify-content:space-between;margin-bottom:var(--sp4);gap:var(--sp3);flex-wrap:wrap">
+                  <select class="inp" id="studioScoreSource" aria-label="选择要查看谱面的任务"></select>
+                  <button class="btn sm ghost" id="btnLoadSelectedScore" type="button">重新加载所选任务</button>
+                </div>
+                <p class="hint" style="margin-top:0">这里和乐谱工作台是同一份谱：任何一边改了，另一边看到的就是改后的。生成新歌时模型一写完谱就显示在这里，不用等整首歌结束。</p>
+                <div class="field">
+                  <label for="studioScore">文本谱面（可直接编辑）</label>
+                  <textarea class="inp mono" id="studioScore" rows="10" disabled
+                    placeholder="还没有带乐谱的任务 · 生成新歌时谱面一写出来就会显示在这里"></textarea>
+                  <div class="hint">这里只编辑文本谱面：不放音块图、不做缩放拖动；逐音符精修请去乐谱工作台。</div>
+                </div>
+                <div class="inline" style="margin-bottom:var(--sp3)">
+                  <button class="chip" id="studioUseScore" type="button" aria-pressed="false"
+                    title="开着就按上面这份谱重新渲染；关着就照常生成新歌，模型自己写谱">用这份谱面生成</button>
+                  <button class="btn sm ghost" id="btnSaveStudioDraft" type="button">保存主页草稿</button>
+                </div>
+                <div class="note" id="studioScoreNote" hidden></div>
+              </div>
+            </details>
             </div>
 
           <div class="card">
@@ -184,12 +255,15 @@
             </div>
 
             <div class="divider"></div>
+            <div class="field"><label for="fSongName">作品名（可选）</label>
+              <input class="inp" id="fSongName" maxlength="200" placeholder="留空 = 自动取歌词第一句">
+              <div class="hint">作为作品名：同一次提交的候选都归到这个作品下，曲库、播放条与派生任务也都用它。</div></div>
             <div class="grid2">
               <div class="field"><label for="fSeed">随机种子</label>
                 <div class="inline" style="gap:var(--sp2)">
                   <input class="inp" id="fSeed" placeholder="留空 = 随机" inputmode="numeric" style="flex:1">
                   <button class="btn" id="btnDice" type="button" aria-label="随机种子">
-                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 8h.01M16 16h.01M12 12h.01"/></svg>
+                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1.7" fill="currentColor" stroke="none"/></svg>
                   </button>
                 </div></div>
               <div class="field"><label for="fVar">候选数量</label>
@@ -241,7 +315,7 @@
                       <select class="inp" id="fVae"></select>
                       <button class="iconbtn rst" id="rstVae" type="button" title="恢复默认" aria-label="恢复默认" disabled><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
                     </div>
-                    <div class="hint">同一份潜变量文件可分别解码对比，不必重新生成。</div></div>
+                    <div class="hint">只用于曲库里的「换解码器重导」；新歌生成固定用默认解码器，不受这里影响。</div></div>
                 </div>
                 <div class="note" id="advNote"></div>
               </div>
@@ -253,18 +327,21 @@
         <!-- 右：队列 + 当前任务 -->
         <aside>
           <div class="card raised" style="margin-bottom:var(--sp5)">
-            <div class="inline" style="justify-content:space-between">
-              <h2>队列</h2><span class="badge" id="qBadge">0 运行 · 0 排队</span>
-            </div>
-            <div id="queue" style="margin-top:var(--sp4)"></div>
+            <button class="qhead" id="queueToggle" type="button" aria-expanded="false"
+              aria-controls="queue" title="收起 / 展开队列">
+              <span class="qt">队列</span>
+              <span class="badge" id="qBadge">0 运行 · 0 排队</span>
+              <span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+            </button>
+            <div id="queue" hidden style="margin-top:var(--sp4)"></div>
           </div>
           <div class="card">
             <h2><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>做完你会得到</h2>
             <ul style="list-style:none;margin-top:var(--sp4);font-size:14px;color:var(--text2)">
-              <li style="padding:var(--sp2) 0;border-bottom:1px solid var(--hairline)"><span class="tk">✓</span> <b>一首完整歌曲</b> — 48kHz 立体声，可下载可循环试听</li>
-              <li style="padding:var(--sp2) 0;border-bottom:1px solid var(--hairline)"><span class="tk">✓</span> <b>一份乐谱</b> — 在乐谱工作台读谱、检查谱面（不规划模式下没有）</li>
-              <li style="padding:var(--sp2) 0;border-bottom:1px solid var(--hairline)"><span class="tk">✓</span> <b>生成记录</b> — 用过的参数与耗时都在曲库里，可一键复用</li>
-              <li style="padding:var(--sp2) 0;color:var(--text3)"><span class="tk w">!</span> 整曲一次成型：改谱 = 重新渲染全曲，其余小节波形<b>不保留</b></li>
+              <li style="padding:var(--sp2) 0;border-bottom:1px solid var(--hairline)"><span class="tk" aria-hidden="true">✓</span> <b>一首完整歌曲</b> — 48kHz 立体声，可下载可循环试听</li>
+              <li style="padding:var(--sp2) 0;border-bottom:1px solid var(--hairline)"><span class="tk" aria-hidden="true">✓</span> <b>一份乐谱</b> — 在乐谱工作台读谱、检查谱面（不规划模式下没有）</li>
+              <li style="padding:var(--sp2) 0;border-bottom:1px solid var(--hairline)"><span class="tk" aria-hidden="true">✓</span> <b>生成记录</b> — 用过的参数与耗时都在曲库里，可一键复用</li>
+              <li style="padding:var(--sp2) 0;color:var(--text3)"><span class="tk w" aria-hidden="true">!</span> 整曲一次成型：改谱 = 重新渲染全曲，其余小节波形<b>不保留</b></li>
             </ul>
           </div>
         </aside>
@@ -272,11 +349,12 @@
 
       <!-- 常驻操作条：滚到哪一屏都能看到「生成歌曲」 -->
       <div class="dock" id="dock">
+        <i class="dockbar" id="dockbar" hidden><b id="dockbarFill"></b></i>
         <div class="dockrow">
           <div class="cost" id="cost">
-            <span>预计耗时</span><b id="costT" class="mono">—</b>
-            <span style="color:var(--text3)">· 队列前 <b id="costQ" class="mono">0</b> 个任务</span>
-            <span class="brk" id="costBrk" role="button" tabindex="0">耗时构成 ▾</span>
+            <span id="costLbl">预计耗时</span><b id="costT" class="mono">—</b>
+            <span id="costQWrap" style="color:var(--text3)">· 队列前 <b id="costQ" class="mono">0</b> 个任务</span>
+            <span class="brk" id="costBrk" role="button" tabindex="0" aria-expanded="false" aria-controls="costUl">耗时构成 ▾</span>
             <ul id="costUl"></ul>
           </div>
           <button class="btn primary big" id="btnGen" type="button">
@@ -292,16 +370,29 @@
     <!-- ---------- SCORE ---------- -->
     <section class="view" id="v-score" aria-labelledby="score-h">
       <div class="vhead">
-        <div class="inline" style="justify-content:space-between;align-items:flex-start;gap:var(--sp4);flex-wrap:wrap">
-          <div><h1 id="score-h">乐谱工作台</h1>
+        <!-- 第一行：标题占满左侧，主 CTA 固定在右上；不再靠 flex-wrap 猜断行 -->
+        <div class="vheadTop">
+          <div class="vheadText"><h1 id="score-h">乐谱工作台</h1>
             <p>白盒核心：读谱 → 改谱 → 逐音符校验 → 重新渲染。改错了 8 分多钟就白费，所以校验在生成<b>之前</b>。</p></div>
-          <div class="inline" style="gap:var(--sp2);flex-wrap:wrap">
-            <select class="inp" id="scoreJob" aria-label="选择任务" style="min-height:40px;max-width:340px"></select>
+          <button class="btn sm primary" id="btnRerender" type="button"
+            title="按当前谱面和主页的风格提示词、歌词整曲重新渲染（约 10 分钟）">改谱重渲染</button>
+        </div>
+        <!-- 第二行：工具条。竖线左边「留在这一页改谱」，右边「换一条路去改词」 -->
+        <div class="scoreBar">
+          <div class="scoreBarGrp">
+            <select class="inp" id="scoreJob" aria-label="选择任务"></select>
             <button class="btn sm" id="btnInspect" type="button">检查谱面</button>
             <a class="btn sm ghost" id="btnAbcDl" href="#" download style="text-decoration:none">下载 score.abc</a>
-            <button class="btn sm primary" id="btnRerender" type="button"
-              title="按右侧改好的谱面整曲重新渲染（约 10 分钟）">改谱重渲染</button>
           </div>
+          <span class="scoreBarSep" aria-hidden="true"></span>
+          <div class="scoreFlow" aria-label="改谱后下一步">
+            <button class="btn sm primary" id="btnToStudio" type="button"
+              title="把这首歌的风格、歌词原样带回表单；这份谱有改动的话，会自动勾上「用这份谱面生成」">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M10 6l-6 6 6 6"/></svg>
+              <span>回创作页改词与风格</span>
+            </button>
+          </div>
+          <span class="scoreFlowHint">风格、歌词、BPM 原样带回；谱有改动会自动勾上「用这份谱面生成」</span>
         </div>
       </div>
       <div class="note" id="scoreNote" hidden></div>
@@ -386,7 +477,7 @@
             </div>
             <div style="margin-top:var(--sp4)">
               <div class="lbl">段落</div>
-              <select class="inp" id="rollSection" aria-label="选择段落" style="min-height:36px"></select>
+              <select class="inp" id="rollSection" aria-label="选择段落"></select>
               <div class="inline" style="gap:var(--sp2);margin-top:var(--sp2)">
                 <button class="btn sm ghost" id="btnSecDup" type="button">复制这一段</button>
                 <button class="btn sm ghost" id="btnSecDrop" type="button">删掉这一段</button>
@@ -414,6 +505,16 @@
               </ul>
             </details>
           </div>
+          <div class="card" id="cardRules">
+            <h2><svg viewBox="0 0 24 24"><path d="M5 3h11l4 4v14H5z"/><path d="M9 9h7M9 13h7M9 17h4"/></svg>给 AI 的谱面规则</h2>
+            <p class="sub" style="margin-top:var(--sp3)">把规则和示例直接粘给写 ABC 的 AI 工具；按它产出的谱，音块图能画、每个音都能改。</p>
+            <p class="sub" style="margin-top:var(--sp2)">不符合这些规则的谱仍能生成音频，但音块图会画不出来，只能在「文本谱」里改。</p>
+            <div class="inline" style="margin-top:var(--sp3)">
+              <button class="btn sm" id="btnCopyRules" type="button">复制规则</button>
+            </div>
+            <pre class="rulesbox mono" id="rulesText" data-notr tabindex="0"
+              aria-label="乐谱规则全文（可全选复制）"></pre>
+          </div>
         </aside>
       </div>
     </section>
@@ -422,7 +523,8 @@
     <section class="view" id="v-library" aria-labelledby="lib-h">
       <div class="vhead">
         <div class="inline" style="justify-content:space-between;align-items:flex-start;gap:var(--sp4);flex-wrap:wrap">
-          <div><h1 id="lib-h">曲库</h1><p>每次生成 = 一条带谱系的任务。选 2 条进入 A/B 盲听对比。</p></div>
+          <div><h1 id="lib-h">曲库</h1><p>每次生成 = 一条带谱系的任务。选 2 条进入 A/B 盲听对比。</p>
+            <p class="sub mono" id="libStats" hidden style="margin-top:var(--sp2);font-size:13px;color:var(--text3)"></p></div>
           <div class="inline">
             <button class="btn sm" id="btnAB" type="button" disabled data-notr>A/B 对比（0）</button>
             <button class="btn sm ghost" id="btnReload" type="button">刷新</button>
@@ -500,11 +602,28 @@
           <li><b>收藏与 A/B</b>：曲库里选两条有音频的任务，切换 A/B 时播放位置不变。</li>
           <li><b>改谱重渲染</b>：乐谱工作台改完点「改谱重渲染」，整曲按新谱重跑，耗时和生成一首相同。</li>
           <li><b>复用参数</b>：详情里点「复制参数到创作」，风格、歌词、种子、高级参数与设备一起回填。</li>
+          <li><b>整页播放页</b>：点右下角「歌词」整页展开，黑胶/歌词/卡拉OK/环形四种形态（见 04 课）。</li>
         </ul>
       </div>
 
       <div class="lesson">
-        <div class="lh"><span class="ln">04</span><div><h2>硬件与等待</h2><p>本机并发恒为 1，时间都花在自回归生成上。</p></div></div>
+        <div class="lh"><span class="ln">04</span><div><h2>整页播放页</h2><p>点右下角「歌词」，播放器整页展开。</p></div></div>
+        <div class="flow">
+          <div class="fstep"><b>黑胶</b><span>唱片随播放旋转，唱臂走到哪唱到哪</span></div>
+          <span class="farrow" aria-hidden="true">→</span>
+          <div class="fstep"><b>歌词 / 卡拉OK</b><span>整页大字滚动 / 逐字点亮</span></div>
+          <span class="farrow" aria-hidden="true">→</span>
+          <div class="fstep"><b>环形</b><span>镜像频谱环 + 中心音频柱、两侧水波</span></div>
+        </div>
+        <ul class="ticks">
+          <li>播放页内按 <b>1–4</b> 切换形态，<b>Esc</b> 收起，点任意歌词句跳转。</li>
+          <li>未播放时底部不占地方；播放中底条中央常驻三句歌词。</li>
+          <li><b>刷新不怕</b>：正在播的歌、进度、播放页展开状态都会自动恢复。</li>
+        </ul>
+      </div>
+
+      <div class="lesson">
+        <div class="lh"><span class="ln">05</span><div><h2>硬件与等待</h2><p>本机并发恒为 1，时间都花在自回归生成上。</p></div></div>
         <ul class="ticks">
           <li>第一次生成会先加载模型，约 1 分钟。</li>
           <li>8GB 显卡能跑短歌；显存不足时自动降级到 CPU，会慢很多。</li>
@@ -514,7 +633,7 @@
       </div>
 
       <div class="lesson">
-        <div class="lh"><span class="ln">05</span><div><h2>边界与授权</h2><p>这些限制来自官方模型与代码，界面无法绕过。</p></div></div>
+        <div class="lh"><span class="ln">06</span><div><h2>边界与授权</h2><p>这些限制来自官方模型与代码，界面无法绕过。</p></div></div>
         <ul class="ticks">
           <li>没有音色克隆：音色只能用风格词描述，不能上传参考音频。</li>
           <li>不支持局部修补：改一个音也要整曲重渲染。</li>
@@ -576,16 +695,82 @@
   </main>
 
   <!-- ============ LYRICS ============ -->
-  <section class="lyr" id="lyr" aria-label="歌词">
+  <section class="lyr" id="lyr" aria-label="歌词" hidden>
     <div class="lyrBody" id="lyrBody">
       <div class="lyrStage" id="lyrStage">
         <div class="lyrSide" id="lyrPrev" data-notr></div>
         <div class="lyrNow empty" id="lyrNow" data-notr></div>
         <div class="lyrSide" id="lyrNext" data-notr></div>
       </div>
-      <div class="lyrList" id="lyrList" role="list"></div>
+      <div class="lyrOpen" id="lyrOpen" hidden>
+        <!-- 展开一律走整页播放页（toggleLyrics），条内不再内嵌列表，因此没有 Tab 行 -->
+        <div class="lyrList" id="lyrList" role="list"></div>
+        <div class="lyrViz" id="lyrViz" role="region" aria-label="播放页">
+          <header class="lvHead">
+            <span class="lvTitle" id="lvTitle" data-notr></span>
+            <div class="lvMode" id="lvModes" role="tablist" aria-label="播放页模式">
+              <button class="on" data-viz="vinyl" role="tab" aria-selected="true" type="button">黑胶</button>
+              <button data-viz="lyrics" role="tab" aria-selected="false" type="button">歌词</button>
+              <button data-viz="karaoke" role="tab" aria-selected="false" type="button">卡拉OK</button>
+              <button data-viz="ring" role="tab" aria-selected="false" type="button">环形</button>
+            </div>
+            <button class="lvClose" id="lvClose" type="button" aria-label="收起播放页" title="收起播放页">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
+          </header>
+          <canvas class="lvCv" id="lvCv" aria-hidden="true"></canvas>
+          <div class="lvStage">
+            <div class="lvVinyl" id="lvVinyl">
+              <div class="lvDeck" aria-hidden="true">
+                <div class="lvPlatter">
+                  <div class="lvVinylDisc" id="lvVinylDisc"><div class="lvLabel" id="lvLabel" data-notr></div></div>
+                  <div class="lvSpindle"></div>
+                </div>
+                <div class="lvArm" id="lvArm">
+                  <div class="lvArmBase"></div>
+                  <div class="lvArmTube"><div class="lvArmHead"></div></div>
+                </div>
+              </div>
+              <div class="lvVSide">
+                <div class="lvVTitle" id="lvVTitle" data-notr></div>
+                <div class="lvVList" id="lvVList" role="list"></div>
+              </div>
+            </div>
+            <div class="lvFull" id="lvFull" hidden>
+              <div class="lvFList" id="lvFList" role="list"></div>
+            </div>
+            <div class="lvKaraoke" id="lvKaraoke" hidden>
+              <div class="lvKRow prev" id="lvKPrev" data-notr></div>
+              <div class="lvKRow now" id="lvKNow" data-notr></div>
+              <div class="lvKRow next" id="lvKNext" data-notr></div>
+            </div>
+            <div class="lvRing" id="lvRing" hidden>
+              <div class="lvDiscWrap">
+                <div class="lvDisc" id="lvDisc" data-notr></div>
+              </div>
+              <div class="lvRCap" data-notr>
+                <div class="capPrev" id="lvRCapPrev"></div>
+                <div class="capNow" id="lvRCapNow"></div>
+                <div class="capNext" id="lvRCapNext"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <button class="btn sm ghost lyrRetry" id="lyrRetry" type="button" hidden>重试对齐</button>
+    <details class="subMenu lyrSub" id="lyrSub">
+      <summary class="btn sm ghost" aria-label="字幕导出" title="字幕导出">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+        <span class="lb">字幕</span>
+      </summary>
+      <div class="subMenuPanel" role="group" aria-label="字幕导出">
+        <button type="button" data-sub="srt">SRT 字幕</button>
+        <button type="button" data-sub="lrc">LRC（行级）</button>
+        <button type="button" data-sub="lrc" data-word="1">LRC（逐字）</button>
+      </div>
+    </details>
+    <span class="lyrTag" id="lyrTag" data-notr hidden></span>
     <button class="lyrTg" id="lyrTg" type="button" aria-expanded="false" aria-controls="lyrBody"
       aria-label="展开歌词" title="展开歌词">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
@@ -612,7 +797,7 @@
       <span class="tm" id="tDur">0:00</span>
     </div>
     <div class="ab" role="group" aria-label="A/B 对比">
-      <button class="on" data-ab="a" type="button">A</button><button data-ab="b" type="button" disabled>B</button>
+      <button class="on" data-ab="a" type="button" title="对比槽 A（在曲库选两条任务进入对比）">A</button><button data-ab="b" type="button" disabled title="对比槽 B（在曲库选两条任务进入对比）">B</button>
     </div>
     <div class="vol"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/></svg>
       <input type="range" id="volR" min="0" max="100" value="90" aria-label="音量"></div>
@@ -648,6 +833,8 @@
     <tr><td>播放 / 暂停</td><td><kbd>空格</kbd>（输入框、按钮上不触发）</td></tr>
     <tr><td>切换界面语言</td><td><kbd>L</kbd></td></tr>
     <tr><td>切换深浅色主题</td><td><kbd>T</kbd></td></tr>
+    <tr><td>收起播放页</td><td><kbd>Esc</kbd>（播放页展开时）</td></tr>
+    <tr><td>播放页切形态</td><td><kbd>1</kbd>–<kbd>4</kbd>（播放页展开时）</td></tr>
     <tr><td>关闭弹层</td><td><kbd>Esc</kbd></td></tr>
     <tr><td>本帮助</td><td><kbd>?</kbd></td></tr>
   </tbody></table>

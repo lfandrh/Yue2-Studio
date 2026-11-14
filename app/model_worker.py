@@ -232,6 +232,23 @@ def _job_log(cmd):
                 os.close(handle)
 
 
+def _early_score(cmd, directory):
+    """出谱就落盘并通知服务端：整首歌还要跑几分钟，谱面不必等到最后。
+
+    用户给的谱（重渲染）和「不规划」模式没有新谱可报，直接跳过。
+    """
+    def on_plan(plan):
+        if plan.abc is None or plan.request.abc is not None:
+            return
+        try:
+            plan.save(directory)
+        except Exception as exc:  # noqa: BLE001 - 提前展示失败不能拖垮生成
+            log.warning("提前写谱失败 job=%s：%s: %s", cmd.get("id"), type(exc).__name__, exc)
+            return
+        emit(event="score", job=cmd.get("id"))
+    return on_plan
+
+
 def generate(cmd):
     with _job_log(cmd):
         _require_pipe()
@@ -242,7 +259,8 @@ def generate(cmd):
         directory = _out_dir(cmd)
         directory.mkdir(parents=True, exist_ok=True)
         started = time.perf_counter()
-        result = PIPE(cancelled=_canceller(cmd.get("cancel_file")), **kwargs)
+        result = PIPE(cancelled=_canceller(cmd.get("cancel_file")),
+                      on_plan=_early_score(cmd, directory), **kwargs)
         result.save_artifacts(directory)
         return time.perf_counter() - started
 
@@ -292,7 +310,7 @@ def staged(cmd):
             tokens = np.load(source / "semantic.npy", allow_pickle=False)
             semantic = SemanticResult(plan_obj, [int(t) for t in tokens.tolist()], {}, False)
         latents = PIPE.synthesize(semantic, cancelled=cancelled)
-        audio = PIPE.decode(latents)
+        audio = PIPE.decode(latents, cancelled=cancelled)
         config = PIPE.effective_config(plan_obj.request)
         request_identity = identity({"request": plan_obj.request.to_dict(), "config": config,
                                      "weights": PIPE.weights})
@@ -389,7 +407,14 @@ def main():
                     release()
                     emit(event="unloaded")
                 elif action in handlers:
-                    emit(event="done", action=action, seconds=handlers[action](cmd))
+                    seconds = handlers[action](cmd)
+                    try:
+                        emit(event="done", action=action, seconds=seconds)
+                    except (OSError, ValueError) as exc:
+                        # The handler already wrote result.json. A dead server must
+                        # not turn a finished song into a failed job.
+                        log.error("任务已完成，但结果无法回传（服务端可能已退出）：%s", exc)
+                        return
                 elif action == "shutdown":
                     release()
                     emit(event="bye")
@@ -406,7 +431,12 @@ def main():
                 if action == "load":
                     release()
                 elif action in handlers and not cmd.get("_trace"):
-                    _write_failure(cmd, exc, trace)
+                    try:
+                        finished = (_out_dir(cmd) / "result.json").exists()
+                    except (KeyError, TypeError):
+                        finished = False
+                    if not finished:
+                        _write_failure(cmd, exc, trace)
                 emit(event="error", action=action, type=type(exc).__name__, trace=trace,
                      cancelled=isinstance(exc, InterruptedError), reason=str(exc))
     finally:

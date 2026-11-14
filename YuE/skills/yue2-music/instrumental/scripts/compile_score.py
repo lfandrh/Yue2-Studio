@@ -17,7 +17,8 @@ import sys
 from abc_tools import DURATIONS, NATURAL, key_accidentals, meter_value, parse_abc, report
 from common import write_json
 
-SECTIONS = {'intro', 'verse', 'pre-chorus', 'chorus', 'bridge', 'interlude', 'outro', 'instrumental'}
+SECTIONS = {'intro', 'verse', 'pre-chorus', 'chorus', 'bridge', 'interlude', 'outro', 'instrumental',
+            'silence'}  # silence：模型生成谱自带的静音段注释（全休止小节），器乐化时原样保留
 
 
 def fraction(value, context):

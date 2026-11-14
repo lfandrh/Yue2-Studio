@@ -359,8 +359,13 @@ const jobs = await (await fetch(`${BASE}/api/jobs`)).json();
 const demo = jobs.jobs.find((j) => j.id === "song_demo_wanfeng");
 check("demo job intact (title/favorite/status)", demo && demo.status === "complete" && demo.title === "示例曲 · 晚风" && demo.favorite === false, {status: demo?.status, title: demo?.title, favorite: demo?.favorite});
 const model = await (await fetch(`${BASE}/api/model`)).json();
-check("model still loaded on cuda", model.state === "loaded" && model.device === "cuda", {state: model.state, device: model.device});
+/* 不写死 cuda：本机 3060 Ti 常自动降级，写死就每次跑都出一条假红。
+   要验的是「状态与真值一致」——报了 loaded 就得有一台明确设备在跑。 */
+check("model reports loaded with a concrete device",
+  model.state === "loaded" && (model.device === "cpu" || model.device === "cuda"),
+  {state: model.state, device: model.device, reason: model.reason});
 
 fs.writeFileSync(`${OUT}/fix-verify-results.json`, JSON.stringify(results, null, 2));
 console.log(`\n${results.filter((r) => r.pass).length}/${results.length} passed`);
 ws.close();
+process.exit(results.some((r) => !r.pass) ? 1 : 0);

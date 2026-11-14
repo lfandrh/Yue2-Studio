@@ -24,7 +24,7 @@ const ICONS = {
   x: ['<path d="M6 6l12 12M18 6 6 18"/>'],
   lines: ['<path d="M4 7h16M4 12h10M4 17h7"/>'],
   text: ['<path d="M5 4h14M5 20h9M7 9h11M7 14h7"/>'],
-  dice: ['<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 8h.01M16 16h.01M12 12h.01"/>'],
+  dice: ['<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1.7" fill="currentColor" stroke="none"/>'],
   abc: ['<path d="M4 6h16M4 12h16M4 18h16M9 3v6M15 9v6M6 15v6" stroke-width="1.6"/>'],
   chev: ['<path d="m6 9 6 6 6-6"/>'],
   info: ['<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>'],
@@ -127,20 +127,57 @@ function host() {
   return toastHost;
 }
 
-export function toast(text, kind = "info", ms = 4600) {
+export function toast(text, kind = "info", ms = 4600, actions = []) {
   const root = host();
   if (!root) return null;
+  const body = el("span", {text});
   const node = el("div", {class: `toast${kind && kind !== "info" ? ` ${kind}` : ""}`, role: kind === "bad" ? "alert" : "status"},
-    [el("span", {html: icon(TOAST_ICON[kind] || "info")}), el("span", {text})]);
+    [el("span", {html: icon(TOAST_ICON[kind] || "info")}), body]);
+  /* 失败/带操作时常驻，带一键复制 + 关闭叉；普通信息按 ms 退 */
+  const needsStay = kind === "bad" || (actions && actions.length) || ms <= 0;
+  const rawDetail = String(text || "");
+  const hasDetail = /\n/.test(rawDetail) || rawDetail.length > 120;
+  if (needsStay && hasDetail) {
+    const details = el("details", {style: "margin-top:6px"});
+    details.append(el("summary", {text: T("原始报错"), style: "cursor:pointer;font-size:12px;opacity:.85"}));
+    details.append(el("pre", {text: rawDetail, style: "white-space:pre-wrap;word-break:break-word;font-size:12px;margin:4px 0 0;max-height:120px;overflow:auto"}));
+    node.append(details);
+  }
+  if (needsStay) {
+    const closeBtn = el("button", {type: "button", class: "toast-x", "aria-label": T("关闭"), text: "×"});
+    closeBtn.addEventListener("click", (e) => { e.stopPropagation(); dismiss(); });
+    node.append(closeBtn);
+    const copyBtn = el("button", {type: "button", class: "toast-copy", text: T("复制详情")});
+    copyBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      try { await navigator.clipboard.writeText(rawDetail); copyBtn.textContent = T("已复制"); }
+      catch { copyBtn.textContent = T("复制失败"); }
+      setTimeout(() => { copyBtn.textContent = T("复制详情"); }, 1600);
+    });
+    node.append(copyBtn);
+  }
+  if (Array.isArray(actions)) {
+    for (const item of actions) {
+      if (!item || typeof item.fn !== "function") continue;
+      const btn = el("button", {type: "button", class: "toast-act", text: item.label || T("好的")});
+      btn.addEventListener("click", (e) => { e.stopPropagation(); try { item.fn(); } finally { dismiss(); } });
+      node.append(btn);
+    }
+  }
+  if (ms <= 0) node.title = T("点击关闭");
   root.append(node);
   requestAnimationFrame(() => node.classList.add("in"));
-  const timer = setTimeout(dismiss, ms);
-  node.addEventListener("click", dismiss);
+  /* 常驻也要有兜底：错误提示从底部往上堆，不退会盖住「生成歌曲」等主按钮。
+     显式传 ms<=0（启动通知、后端断连）才真正永久驻留。 */
+  const stayMs = needsStay ? Math.max(ms, 12000) : ms;
+  const timer = stayMs > 0 ? setTimeout(dismiss, stayMs) : null;
+  if (!needsStay) node.addEventListener("click", dismiss);
   function dismiss() {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
     node.classList.remove("in");
     setTimeout(() => node.remove(), 240);
   }
+  dismiss.timer = timer;
   return dismiss;
 }
 
@@ -190,6 +227,7 @@ export function closeModal(node) {
   target.inert = true;
   target.setAttribute("aria-hidden", "true");
   syncScrim();
+  target.dispatchEvent(new CustomEvent("modal:close"));
   if (!stack.length && restoreTo && restoreTo.isConnected) {
     restoreTo.focus({preventScroll: true});
     restoreTo = null;
@@ -243,6 +281,10 @@ document.addEventListener("click", (event) => {
 
 /* 确认框：resolve(true/false)，关闭后自行移除节点 */
 export function confirmDialog({title, body, ok, cancel, danger = false, note = ""}) {
+  /* 同名确认弹窗已在开时直接复用它的结果，避免快速连点叠出好几层一样的弹窗。 */
+  const sameTitle = [...document.querySelectorAll(".modal.open h3")].find((h) => h.textContent === title);
+  const sameNode = sameTitle ? sameTitle.closest(".modal") : null;
+  if (sameNode && sameNode.__dialogPromise) return sameNode.__dialogPromise;
   const id = `dlg${Date.now().toString(36)}`;
   const okLabel = ok || T("确定");
   const cancelLabel = cancel || T("取消");
@@ -257,7 +299,7 @@ export function confirmDialog({title, body, ok, cancel, danger = false, note = "
     `<div class="mfb"><button class="btn" type="button" data-cancel${danger ? " data-autofocus" : ""}>${esc(cancelLabel)}</button>` +
     `<button class="btn ${danger ? "danger" : "primary"}" type="button" data-ok${danger ? "" : " data-autofocus"}>${esc(okLabel)}</button></div>`;
   document.body.append(node);
-  return new Promise((resolve) => {
+  const promise = new Promise((resolve) => {
     let settled = false;
     const finish = (value) => {
       if (settled) return;
@@ -272,4 +314,6 @@ export function confirmDialog({title, body, ok, cancel, danger = false, note = "
     node.addEventListener("modal:cancel", () => finish(false));
     openModal(node);
   });
+  node.__dialogPromise = promise;
+  return promise;
 }

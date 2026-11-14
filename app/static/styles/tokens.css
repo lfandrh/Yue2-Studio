@@ -34,6 +34,12 @@
   --porcelain:#93BCA6; --porcelain-h:#A6CDB8; --porcelain-p:#7FA994;
   --meter-lo:#5FAE84; --meter-mid:#E4B23C; --meter-hi:#DE6A58;
   --paper:#F7F4EC; --ink:#1B1A17; --paper-bd:#DDD5C4; --paper-line:#C9C0AE; --paper-accent:#8A5A16;
+  /* 谱纸家族里音块图专用的一档：画布 (app.js rollDraw) 与图例 (.hl-*) 共用，别处不再写字面量 */
+  --roll-band:rgba(28,110,107,.07); --roll-band-text:#4E6A63; --roll-line:#C9C0AE;
+  --roll-line-weak:#E5DDCC; --roll-grid:#EAE2D1; --roll-vocal:#1C6E6B; --roll-ins:#8A5A16;
+  --roll-chord:#6B4A8E; --roll-sel:#B0413E; --roll-axis-text:#7B7264;
+  /* 谱纸上的工具条文字（.paper .ph/.rollbar 及其子元素共用）：深浅主题同值，纸恒为浅 */
+  --roll-head-text:#5A5346; --roll-bar-soft:#6E6656; --roll-gutter:#736B5B;
   --font-ui:"Inter","CJK","Microsoft YaHei",system-ui,-apple-system,sans-serif;
   --font-mono:"JetMono","CJK",ui-monospace,Consolas,"Courier New",monospace;
   --r1:4px; --r2:8px; --r3:14px; --r4:20px;

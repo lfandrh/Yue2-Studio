@@ -537,7 +537,7 @@ class YuE2Pipeline:
                 "validation_status": "unvalidated"}
 
     def __call__(self, style=None, lyrics=None, *, tags=None, abc_sampling=None,
-                 semantic_sampling=None, cancelled=None, on_token=None, **kwargs):
+                 semantic_sampling=None, cancelled=None, on_token=None, on_plan=None, **kwargs):
         request = self._request(style, lyrics, tags=tags, **kwargs)
         config = self.effective_config(request, abc_sampling, semantic_sampling)
         request_id = identity({"request": request.to_dict(), "config": config, "weights": self.weights})
@@ -546,6 +546,9 @@ class YuE2Pipeline:
             torch.cuda.reset_peak_memory_stats(self.device)
         start = time.perf_counter()
         plan = self.plan(request=request, abc_sampling=abc_sampling, cancelled=cancelled, on_token=on_token)
+        if on_plan is not None:
+            # 整首歌还要跑几分钟：调用方想尽早读到谱，就在这里拿 plan 落盘。
+            on_plan(plan)
         self._mem("after_abc")
         semantic = self.generate_semantic(plan, sampling=semantic_sampling, cancelled=cancelled, on_token=on_token)
         nar_start = time.perf_counter()

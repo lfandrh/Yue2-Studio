@@ -72,5 +72,35 @@ def instrumentalize(abc: str, overlap: str = "vocal", keep_chords: bool = True) 
     _ensure()
     if overlap not in ("vocal", "error"):
         raise ValueError("overlap must be vocal or error")
-    text, check = _convert_score(abc, overlap=overlap, keep_chords=bool(keep_chords))
+    # 官方 convert_score 只认 intro/verse/... 固定段名，模型原谱含 verse 1/chorus 1 等
+    # 复合标签会整单 400（BUG-004）。这里不改上游词表：失败时按通用标题归一化重试，
+    # 归一化方式是保守的（取首词并按已知段族映射），产物仍逐音校验。
+    try:
+        text, check = _convert_score(abc, overlap=overlap, keep_chords=bool(keep_chords))
+    except ValueError:
+        fixed = _normalize_section_labels(abc)
+        if fixed == abc:
+            raise
+        text, check = _convert_score(fixed, overlap=overlap, keep_chords=bool(keep_chords))
+        check = {**check, "section_normalized": True}
     return {"abc": text, "check": check}
+
+
+_FAMILY = {"intro": "intro", "verse": "verse", "pre-chorus": "pre-chorus",
+           "chorus": "chorus", "bridge": "bridge", "interlude": "interlude",
+           "outro": "outro", "instrumental": "instrumental"}
+
+
+def _normalize_section_labels(abc: str) -> str:
+    lines = []
+    for line in abc.splitlines():
+        if line.startswith("% "):
+            label = line[2:].strip().lower()
+            head = label.split()[0] if label else ""
+            mapped = _FAMILY.get(head)
+            if mapped is None and label.startswith(("post-", "pre-")):
+                mapped = "pre-chorus" if label.startswith("pre-") else "chorus"
+            lines.append(f"% {mapped}" if mapped else line)
+        else:
+            lines.append(line)
+    return "\n".join(lines) + ("\n" if abc.endswith("\n") else "")
