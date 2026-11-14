@@ -1,10 +1,10 @@
 {
-  "version": "0.3.0",
+  "version": "0.3.1",
   "channel": "stable",
-  "url": "https://gitee.com/isxiaobaia/yue2-studio/raw/main/releases/yue2-code-0.3.0.zip",
-  "sha256": "1f242adb6f6bc8aabb244e9eec47c7504072e914859aebc7ecbb9505b7dd603c",
-  "size": 375970,
-  "changelog": "0.3.0：修复下载/按钮无响应；更新入口更醒目；新增最低版本校验。",
+  "url": "https://gitee.com/isxiaobaia/yue2-studio/raw/main/releases/yue2-code-0.3.1.zip",
+  "sha256": "624c5c2d3a2535a1e050b202efd0e6f8a0bf78f5f2700987313b1eb848e23529",
+  "size": 375463,
+  "changelog": "0.3.1：修复歌词接口 500（_read_json 签名冲突）；含仓库全部最新代码。更新后浏览器标题显示 v0.3.1。",
   "published_at": "2026-11-14",
   "min_version": "0.1.0"
 }
